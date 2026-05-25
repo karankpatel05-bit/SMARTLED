@@ -41,23 +41,45 @@ jobs:
           unzip -q /tmp/gradle.zip -d /opt/gradle
           echo "/opt/gradle/gradle-8.3/bin" >> $GITHUB_PATH
 
-      # 5. Copy web files into Android assets
+      # 5. Download and Generate app icons
+      - name: Generate app icons
+        run: |
+          wget -q https://img.icons8.com/color/512/idea.png -O /tmp/logo.png
+          pip3 install Pillow
+          python3 - <<'EOF'
+          from PIL import Image
+          import os
+          img = Image.open('/tmp/logo.png').convert('RGBA')
+          sizes = {'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192}
+          for density, size in sizes.items():
+              d = f'android/app/src/main/res/mipmap-{density}'
+              os.makedirs(d, exist_ok=True)
+              bg = Image.new('RGBA', (size, size), (15, 23, 42, 255)) # Dark blue background matching style.css
+              s = int(size * 0.75)
+              r = img.resize((s, s), Image.LANCZOS)
+              o = (size - s) // 2
+              bg.paste(r, (o, o), r)
+              bg.convert('RGB').save(f'{d}/ic_launcher.png')
+              print(f'Created {d}/ic_launcher.png ({size}px)')
+          EOF
+
+      # 6. Copy web files into Android assets
       - name: Copy web files to assets
         run: |
           mkdir -p android/app/src/main/assets/www
           cp webapp/index.html webapp/app.js webapp/style.css webapp/manifest.json webapp/sw.js \
              android/app/src/main/assets/www/
 
-      # 6. Build debug APK
+      # 7. Build debug APK
       - name: Build APK
         working-directory: android
         run: gradle assembleDebug --no-daemon --stacktrace
 
-      # 7. Find and display APK path
+      # 8. Find and display APK path
       - name: Locate APK
         run: find android -name "*.apk" 2>/dev/null
 
-      # 8. Upload APK as downloadable artifact
+      # 9. Upload APK as downloadable artifact
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

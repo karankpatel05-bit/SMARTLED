@@ -1,11 +1,11 @@
 apply plugin: 'com.android.application'
 
 android {
-    namespace 'com.robomanthan.navis'
+    namespace 'com.smartled.app'
     compileSdkVersion 34
 
     defaultConfig {
-        applicationId "com.robomanthan.navis"
+        applicationId "com.smartled.app"
         minSdkVersion 22
         targetSdkVersion 34
         versionCode 1
