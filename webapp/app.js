@@ -14,6 +14,9 @@ const voiceTranscript = document.getElementById('voice-transcript');
 const videoElement = document.getElementById('input-video');
 const canvasElement = document.getElementById('output-canvas');
 const canvasCtx = canvasElement.getContext('2d');
+const powerBtn = document.getElementById('power-btn');
+const brightnessSlider = document.getElementById('brightness-slider');
+const sliderPctLabel = document.getElementById('slider-pct-label');
 
 // --- State ---
 let ws = null;
@@ -85,6 +88,15 @@ function updateUI() {
     const p = (botState.power === 1 && botState.brightness > 0) ? (botState.brightness / 255) * 100 : 0;
     brightnessBar.style.width = `${p}%`;
     brightnessText.textContent = `${Math.round(p)}%`;
+
+    // Sync manual controls
+    brightnessSlider.value = botState.brightness;
+    sliderPctLabel.textContent = `${Math.round((botState.brightness / 255) * 100)}%`;
+    if (botState.power === 1) {
+        powerBtn.classList.add('on');
+    } else {
+        powerBtn.classList.remove('on');
+    }
     
     if (botState.power === 0 || botState.brightness === 0) {
         statusIcon.classList.add('off');
@@ -94,6 +106,27 @@ function updateUI() {
         statusIcon.style.filter = `drop-shadow(0 0 ${10 + p/10}px rgba(234, 179, 8, ${0.5 + p/200}))`;
     }
 }
+
+// --- Manual Controls Logic ---
+powerBtn.addEventListener('click', () => {
+    botState.power = botState.power === 1 ? 0 : 1;
+    // When turning on from off, restore to a default brightness if it was 0
+    if (botState.power === 1 && botState.brightness === 0) {
+        botState.brightness = 255;
+        brightnessSlider.value = 255;
+    }
+    sendState();
+});
+
+brightnessSlider.addEventListener('input', () => {
+    const val = parseInt(brightnessSlider.value);
+    botState.brightness = val;
+    // Auto-power on if slider moved above 0 from an off state
+    if (val > 0) botState.power = 1;
+    else botState.power = 0;
+    sliderPctLabel.textContent = `${Math.round((val / 255) * 100)}%`;
+    sendState();
+});
 
 // --- MediaPipe Hands Logic ---
 const hands = new Hands({
