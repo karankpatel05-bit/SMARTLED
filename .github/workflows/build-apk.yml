@@ -1,0 +1,66 @@
+name: Build SMARTLED Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+
+    steps:
+      # 1. Checkout
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Java 17
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # 3. Accept SDK licenses & install required components
+      - name: Setup Android SDK components
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
+
+      # 4. Install Gradle 8.3 directly (no wrapper needed)
+      - name: Install Gradle 8.3
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.3-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt/gradle
+          echo "/opt/gradle/gradle-8.3/bin" >> $GITHUB_PATH
+
+      # 5. Copy web files into Android assets
+      - name: Copy web files to assets
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp webapp/index.html webapp/app.js webapp/style.css webapp/manifest.json webapp/sw.js \
+             android/app/src/main/assets/www/
+
+      # 6. Build debug APK
+      - name: Build APK
+        working-directory: android
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      # 7. Find and display APK path
+      - name: Locate APK
+        run: find android -name "*.apk" 2>/dev/null
+
+      # 8. Upload APK as downloadable artifact
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMARTLED-Android-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30

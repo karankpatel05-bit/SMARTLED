@@ -1,5 +1,5 @@
 #include <WiFi.h>
-#include <WiFiUdp.h>
+#include <WebSocketsServer.h>
 
 // ==========================================
 // WiFi Credentials (UPDATE THESE)
@@ -18,11 +18,43 @@ const int freq = 5000;
 const int resolution = 8;
 
 // ==========================================
-// UDP Broadcast Configuration
+// WebSocket Configuration
 // ==========================================
-WiFiUDP udp;
-const int udpPort = 4210;
-char packetBuffer[255]; 
+WebSocketsServer webSocket = WebSocketsServer(81);
+
+void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
+  switch (type) {
+    case WStype_DISCONNECTED:
+      Serial.printf("[%u] Disconnected!\n", num);
+      break
+;    case WStype_CONNECTED: {
+      IPAddress ip = webSocket.remoteIP(num);
+      Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
+      break;
+    }
+    case WStype_TEXT: {
+      // Parse format: "power,brightness"
+      // Example: "1,255" or "0,127"
+      String data = String((char *)payload);
+      data.trim();
+      
+      int commaIdx = data.indexOf(',');
+      if (commaIdx != -1) {
+        int power = data.substring(0, commaIdx).toInt();
+        int brightness = data.substring(commaIdx + 1).toInt();
+        
+        if (power == 0) {
+          ledcWrite(enaPin, 0);
+          Serial.println("Action: LED OFF");
+        } else {
+          ledcWrite(enaPin, brightness);
+          Serial.printf("Action: LED ON (Brightness: %d)\n", brightness);
+        }
+      }
+      break;
+    }
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -46,36 +78,12 @@ void setup() {
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
   
-  // Start UDP Listener
-  udp.begin(udpPort);
-  Serial.printf("🔗 Listening for UDP Broadcasts on port %d\n", udpPort);
+  // Start WebSocket Server
+  webSocket.begin();
+  webSocket.onEvent(webSocketEvent);
+  Serial.println("🔗 Listening for WebSocket connections on port 81");
 }
 
 void loop() {
-  int packetSize = udp.parsePacket();
-  if (packetSize) {
-    int len = udp.read(packetBuffer, 255);
-    if (len > 0) {
-      packetBuffer[len] = 0;
-    }
-    
-    // Parse format: "power,brightness\n"
-    // Example: "1,255" or "0,127"
-    String data = String(packetBuffer);
-    data.trim();
-    
-    int commaIdx = data.indexOf(',');
-    if (commaIdx != -1) {
-      int power = data.substring(0, commaIdx).toInt();
-      int brightness = data.substring(commaIdx + 1).toInt();
-      
-      if (power == 0) {
-        ledcWrite(enaPin, 0);
-        Serial.println("Action: LED OFF");
-      } else {
-        ledcWrite(enaPin, brightness);
-        Serial.printf("Action: LED ON (Brightness: %d)\n", brightness);
-      }
-    }
-  }
+  webSocket.loop();
 }

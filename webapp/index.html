@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SMARTLED PWA</title>
+    
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- MediaPipe dependencies -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Phosphor Icons -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+
+    <!-- Connection Screen -->
+    <div id="connection-screen" class="glass-panel active">
+        <div class="logo-container">
+            <i class="ph ph-lightbulb bulb-icon"></i>
+            <h1>Smart LED</h1>
+        </div>
+        <p>Connect to your ESP32</p>
+        <div class="input-group">
+            <i class="ph ph-wifi-high"></i>
+            <input type="text" id="ip-input" placeholder="e.g. 192.168.0.16">
+        </div>
+        <button id="connect-btn" class="primary-btn">Connect</button>
+        <div id="connection-status"></div>
+    </div>
+
+    <!-- Main Controller Screen -->
+    <div id="main-screen" class="glass-panel">
+        
+        <header>
+            <div class="status-indicator">
+                <div class="dot connected"></div>
+                <span>Connected</span>
+            </div>
+            <button id="disconnect-btn" class="icon-btn"><i class="ph ph-x"></i></button>
+        </header>
+
+        <div class="camera-container">
+            <video id="input-video" playsinline></video>
+            <canvas id="output-canvas"></canvas>
+            
+            <div class="led-status-overlay">
+                <i class="ph ph-lightbulb" id="status-icon"></i>
+                <div class="progress-bar-container">
+                    <div id="brightness-bar" class="progress-bar"></div>
+                </div>
+                <span id="brightness-text">0%</span>
+            </div>
+        </div>
+
+        <div class="controls-panel">
+            <button id="mic-btn" class="action-btn">
+                <i class="ph ph-microphone"></i>
+                <span>Voice Command</span>
+            </button>
+            <button id="camera-toggle-btn" class="action-btn">
+                <i class="ph ph-camera-rotate"></i>
+                <span>Flip Camera</span>
+            </button>
+        </div>
+        <div id="voice-transcript" class="transcript">Say something like "Turn on" or "Set to 50%"</div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Register Service Worker for PWA
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js');
+            });
+        }
+    </script>
+</body>
+</html>
