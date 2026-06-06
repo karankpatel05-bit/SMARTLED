@@ -18,103 +18,86 @@ const brightnessSlider = document.getElementById('brightness-slider');
 const sliderPctLabel = document.getElementById('slider-pct-label');
 const resetDeviceBtn = document.getElementById('reset-device-btn');
 
-// --- Adafruit IO MQTT Config ---
+// --- Adafruit IO REST API Config ---
 // AIO_USERNAME and AIO_KEY are loaded from config.js
-const AIO_SERVER = "io.adafruit.com";
-const AIO_PORT = 443;
-const AIO_FEED_TOPIC = `${AIO_USERNAME}/Feeds/smartled-commands`;
+const AIO_FEED_KEY = "smartled-commands";
+const AIO_REST_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${AIO_FEED_KEY}/data`;
+
+// Publish a value to Adafruit IO via REST API (no WebSocket needed)
+async function publishToAIO(value) {
+    try {
+        const response = await fetch(AIO_REST_URL, {
+            method: 'POST',
+            headers: {
+                'X-AIO-Key': AIO_KEY,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ value: value })
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            console.error('AIO publish failed:', err);
+            return false;
+        }
+        return true;
+    } catch (e) {
+        console.error('AIO fetch error:', e);
+        return false;
+    }
+}
 
 // --- State ---
-let mqttClient = null;
 let botState = { power: 1, brightness: 127 };
 let lastActionTime = 0;
 let stableFingers = -1;
 let fingerFrames = 0;
 let isListening = false;
-let facingMode = 'user'; // 'user' (front) or 'environment' (back)
+let facingMode = 'user';
 let camera = null;
 
-// --- MQTT Logic ---
-connectBtn.addEventListener('click', () => {
-    // Guard: check credentials are loaded
+// --- Auto-connect on load: skip connection screen ---
+window.addEventListener('load', () => {
     if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME' ||
         !AIO_KEY || AIO_KEY === 'YOUR_AIO_KEY') {
-        connectionStatus.textContent = "❌ Credentials missing in config.js!";
-        connectionStatus.style.color = "var(--danger)";
+        connectionStatus.textContent = '❌ Credentials missing in config.js!';
+        connectionStatus.style.color = 'var(--danger)';
         return;
     }
+    // Skip connection screen — REST API needs no persistent connection
+    connectionScreen.classList.remove('active');
+    mainScreen.classList.add('active');
+    startCamera();
+});
 
-    connectionStatus.textContent = "Connecting to Adafruit IO...";
-    connectionStatus.style.color = "var(--text-muted)";
-
-    const clientId = "SmartLED_PWA_" + Math.random().toString(16).substring(2, 10);
-    mqttClient = new Paho.MQTT.Client("io.adafruit.com", 443, "/mqtt", clientId);
-
-    mqttClient.onConnectionLost = (responseObject) => {
-        console.log("Disconnected from Adafruit IO", responseObject);
-        mainScreen.classList.remove('active');
-        connectionScreen.classList.add('active');
-        connectionStatus.textContent = "Disconnected. Try again.";
-        connectionStatus.style.color = "var(--danger)";
-        stopCamera();
-    };
-
-    // 15 second timeout to catch silent failures
-    const connectTimeout = setTimeout(() => {
-        connectionStatus.textContent = "⏱️ Timeout - Check internet connection.";
-        connectionStatus.style.color = "var(--danger)";
-    }, 15000);
-
-    const options = {
-        useSSL: true,
-        userName: AIO_USERNAME,
-        password: AIO_KEY,
-        keepAliveInterval: 30,
-        onSuccess: () => {
-            clearTimeout(connectTimeout);
-            console.log("Connected to Adafruit IO MQTT");
-            connectionScreen.classList.remove('active');
-            mainScreen.classList.add('active');
-            startCamera();
-            sendState();
-        },
-        onFailure: (message) => {
-            clearTimeout(connectTimeout);
-            console.error("MQTT Connection failed:", message);
-            connectionStatus.textContent = `❌ Failed: ${message.errorMessage || message.errorCode}`;
-            connectionStatus.style.color = "var(--danger)";
-        }
-    };
-
-    mqttClient.connect(options);
+connectBtn.addEventListener('click', () => {
+    if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME') {
+        connectionStatus.textContent = '❌ Credentials missing!';
+        connectionStatus.style.color = 'var(--danger)';
+        return;
+    }
+    connectionScreen.classList.remove('active');
+    mainScreen.classList.add('active');
+    startCamera();
 });
 
 disconnectBtn.addEventListener('click', () => {
-    if (mqttClient) mqttClient.disconnect();
+    mainScreen.classList.remove('active');
+    connectionScreen.classList.add('active');
+    stopCamera();
 });
 
 function sendState() {
-    if (mqttClient && mqttClient.isConnected()) {
-        const payload = `${botState.power},${botState.brightness}`;
-        const message = new Paho.MQTT.Message(payload);
-        message.destinationName = AIO_FEED_TOPIC;
-        message.qos = 1;
-        mqttClient.send(message);
-        updateUI();
-    }
+    const payload = `${botState.power},${botState.brightness}`;
+    publishToAIO(payload);
+    updateUI();
 }
 
 resetDeviceBtn.addEventListener('click', () => {
-    if (confirm("Are you sure you want to wipe the ESP8266's Wi-Fi credentials? This will restart the device in setup mode.")) {
-        if (mqttClient && mqttClient.isConnected()) {
-            const message = new Paho.MQTT.Message("RESET");
-            message.destinationName = AIO_FEED_TOPIC;
-            message.qos = 1;
-            mqttClient.send(message);
-            alert("Reset command sent. The device will restart shortly.");
-        } else {
-            alert("Not connected to MQTT.");
-        }
+    if (confirm("Wipe the ESP8266's Wi-Fi credentials? It will restart in setup mode.")) {
+        publishToAIO('RESET').then(ok => {
+            if (ok) alert('Reset command sent!');
+            else alert('Failed to send reset command.');
+        });
     }
 });
 
@@ -131,13 +114,13 @@ function updateUI() {
     } else {
         powerBtn.classList.remove('on');
     }
-    
+
     if (botState.power === 0 || botState.brightness === 0) {
         statusIcon.classList.add('off');
         statusIcon.style.filter = 'none';
     } else {
         statusIcon.classList.remove('off');
-        statusIcon.style.filter = `drop-shadow(0 0 ${10 + p/10}px rgba(234, 179, 8, ${0.5 + p/200}))`;
+        statusIcon.style.filter = `drop-shadow(0 0 ${10 + p / 10}px rgba(234, 179, 8, ${0.5 + p / 200}))`;
     }
 }
 
@@ -183,13 +166,13 @@ function countFingers(landmarks, handedness) {
     const isLeft = handedness === 'Left';
     if (isLeft && landmarks[4].x > landmarks[3].x) count++;
     else if (!isLeft && landmarks[4].x < landmarks[3].x) count++;
-    
+
     // Index, Middle, Ring, Pinky
     if (landmarks[8].y < landmarks[6].y) count++;
     if (landmarks[12].y < landmarks[10].y) count++;
     if (landmarks[16].y < landmarks[14].y) count++;
     if (landmarks[20].y < landmarks[18].y) count++;
-    
+
     return count;
 }
 
@@ -197,23 +180,23 @@ function onResults(results) {
     // Resize canvas to match video
     canvasElement.width = videoElement.videoWidth;
     canvasElement.height = videoElement.videoHeight;
-    
+
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-    
+
     // Draw Video feed
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
-    
+
     if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
         const landmarks = results.multiHandLandmarks[0];
         const handedness = results.multiHandedness[0].label;
-        
+
         // Draw Hand
-        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#3b82f6', lineWidth: 3});
-        drawLandmarks(canvasCtx, landmarks, {color: '#eab308', lineWidth: 1, radius: 3});
-        
+        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#3b82f6', lineWidth: 3 });
+        drawLandmarks(canvasCtx, landmarks, { color: '#eab308', lineWidth: 1, radius: 3 });
+
         const fingers = countFingers(landmarks, handedness);
-        
+
         // Debounce Logic
         if (fingers === stableFingers) {
             fingerFrames++;
@@ -221,12 +204,12 @@ function onResults(results) {
             stableFingers = fingers;
             fingerFrames = 0;
         }
-        
+
         // Apply gesture if stable for 15 frames (~0.5s) and debounce time passed (1s)
         const now = Date.now();
         if (fingerFrames > 10 && (now - lastActionTime) > 1000) {
             lastActionTime = now;
-            
+
             if (fingers === 0) {
                 botState.power = 0;
             } else {
@@ -245,7 +228,7 @@ function startCamera() {
     }
     camera = new Camera(videoElement, {
         onFrame: async () => {
-            await hands.send({image: videoElement});
+            await hands.send({ image: videoElement });
         },
         width: 640,
         height: 480,
@@ -264,7 +247,7 @@ function stopCamera() {
 cameraToggleBtn.addEventListener('click', () => {
     facingMode = facingMode === 'user' ? 'environment' : 'user';
     // Mirroring logic: we only mirror if it's the front camera
-    if(facingMode === 'user') {
+    if (facingMode === 'user') {
         canvasElement.style.transform = 'scaleX(-1)';
     } else {
         canvasElement.style.transform = 'scaleX(1)';
@@ -278,32 +261,32 @@ if (SpeechRecognition) {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.lang = 'en-US';
-    
+
     recognition.onstart = () => {
         isListening = true;
         micBtn.classList.add('listening');
         voiceTranscript.textContent = "Listening...";
     };
-    
+
     recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript.toLowerCase().trim();
         voiceTranscript.textContent = `"${transcript}"`;
         parseVoiceCommand(transcript);
     };
-    
+
     recognition.onerror = (event) => {
         console.error("Speech Error:", event.error);
         voiceTranscript.textContent = "Error listening to voice.";
     };
-    
+
     recognition.onend = () => {
         isListening = false;
         micBtn.classList.remove('listening');
         setTimeout(() => {
-            if(!isListening) voiceTranscript.textContent = "Say something like \"Turn on\" or \"Set to 50%\"";
+            if (!isListening) voiceTranscript.textContent = "Say something like \"Turn on\" or \"Set to 50%\"";
         }, 3000);
     };
-    
+
     micBtn.addEventListener('click', () => {
         if (isListening) {
             recognition.stop();
@@ -319,18 +302,18 @@ if (SpeechRecognition) {
 function parseVoiceCommand(text) {
     if (text.includes('turn on') || text.includes('lights on')) {
         botState.power = 1;
-        if(botState.brightness === 0) botState.brightness = 255;
-    } 
+        if (botState.brightness === 0) botState.brightness = 255;
+    }
     else if (text.includes('turn off') || text.includes('lights off')) {
         botState.power = 0;
-    } 
+    }
     else if (text.includes('%') || text.includes('percent')) {
         // Extract number
         const match = text.match(/(\d+)/);
         if (match) {
             let pct = parseInt(match[1]);
             pct = Math.max(0, Math.min(100, pct)); // clamp 0-100
-            
+
             if (pct === 0) {
                 botState.power = 0;
             } else {
@@ -339,6 +322,6 @@ function parseVoiceCommand(text) {
             }
         }
     }
-    
+
     sendState();
 }
