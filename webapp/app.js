@@ -36,11 +36,18 @@ let camera = null;
 
 // --- MQTT Logic ---
 connectBtn.addEventListener('click', () => {
+    // Guard: check credentials are loaded
+    if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME' ||
+        !AIO_KEY || AIO_KEY === 'YOUR_AIO_KEY') {
+        connectionStatus.textContent = "❌ Credentials missing in config.js!";
+        connectionStatus.style.color = "var(--danger)";
+        return;
+    }
+
     connectionStatus.textContent = "Connecting to Adafruit IO...";
     connectionStatus.style.color = "var(--text-muted)";
-    
+
     const clientId = "SmartLED_PWA_" + Math.random().toString(16).substring(2, 10);
-    // Paho MQTT over WSS: host, port, path, clientId
     mqttClient = new Paho.MQTT.Client("io.adafruit.com", 443, "/mqtt", clientId);
 
     mqttClient.onConnectionLost = (responseObject) => {
@@ -52,11 +59,19 @@ connectBtn.addEventListener('click', () => {
         stopCamera();
     };
 
+    // 15 second timeout to catch silent failures
+    const connectTimeout = setTimeout(() => {
+        connectionStatus.textContent = "⏱️ Timeout - Check internet connection.";
+        connectionStatus.style.color = "var(--danger)";
+    }, 15000);
+
     const options = {
         useSSL: true,
         userName: AIO_USERNAME,
         password: AIO_KEY,
+        keepAliveInterval: 30,
         onSuccess: () => {
+            clearTimeout(connectTimeout);
             console.log("Connected to Adafruit IO MQTT");
             connectionScreen.classList.remove('active');
             mainScreen.classList.add('active');
@@ -64,8 +79,9 @@ connectBtn.addEventListener('click', () => {
             sendState();
         },
         onFailure: (message) => {
+            clearTimeout(connectTimeout);
             console.error("MQTT Connection failed:", message);
-            connectionStatus.textContent = "Connection failed.";
+            connectionStatus.textContent = `❌ Failed: ${message.errorMessage || message.errorCode}`;
             connectionStatus.style.color = "var(--danger)";
         }
     };
