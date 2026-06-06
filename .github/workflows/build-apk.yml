@@ -63,11 +63,20 @@ jobs:
               print(f'Created {d}/ic_launcher.png ({size}px)')
           EOF
 
+      # 5.5 Generate config.js from secrets
+      - name: Generate config.js
+        env:
+          AIO_USERNAME: ${{ secrets.AIO_USERNAME }}
+          AIO_KEY: ${{ secrets.AIO_KEY }}
+        run: |
+          echo "const AIO_USERNAME = \"$AIO_USERNAME\";" > webapp/config.js
+          echo "const AIO_KEY = \"$AIO_KEY\";" >> webapp/config.js
+
       # 6. Copy web files into Android assets
       - name: Copy web files to assets
         run: |
           mkdir -p android/app/src/main/assets/www
-          cp webapp/index.html webapp/app.js webapp/style.css webapp/manifest.json webapp/sw.js \
+          cp webapp/index.html webapp/app.js webapp/style.css webapp/manifest.json webapp/sw.js webapp/config.js \
              android/app/src/main/assets/www/
 
       # 7. Build debug APK
