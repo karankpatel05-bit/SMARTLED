@@ -15,6 +15,12 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
+    <!-- Configuration -->
+    <script src="config.js"></script>
+
+    <!-- MQTT Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.1.0/paho-mqtt.min.js"></script>
+
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
 </head>
@@ -26,12 +32,8 @@
             <i class="ph ph-lightbulb bulb-icon"></i>
             <h1>Smart LED</h1>
         </div>
-        <p>Connect to your ESP32</p>
-        <div class="input-group">
-            <i class="ph ph-wifi-high"></i>
-            <input type="text" id="ip-input" placeholder="e.g. 192.168.0.16">
-        </div>
-        <button id="connect-btn" class="primary-btn">Connect</button>
+        <p>Connect to Adafruit IO</p>
+        <button id="connect-btn" class="primary-btn">Connect MQTT</button>
         <div id="connection-status"></div>
     </div>
 
@@ -83,6 +85,12 @@
             <button id="camera-toggle-btn" class="action-btn">
                 <i class="ph ph-camera-rotate"></i>
                 <span>Flip Camera</span>
+            </button>
+        </div>
+        <div class="controls-panel" style="margin-top: 15px;">
+            <button id="reset-device-btn" class="action-btn" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1);">
+                <i class="ph ph-warning-circle"></i>
+                <span>Reset Wi-Fi</span>
             </button>
         </div>
         <div id="voice-transcript" class="transcript">Say something like "Turn on" or "Set to 50%"</div>

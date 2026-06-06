@@ -1,89 +1,123 @@
-#include <WiFi.h>
-#include <WebSocketsServer.h>
+#include <ESP8266WiFi.h>
+#include <WiFiManager.h>
+#include <PubSubClient.h>
 
 // ==========================================
-// WiFi Credentials (UPDATE THESE)
+// Adafruit IO Configuration
 // ==========================================
-const char* ssid = "YOUR_SSID";
-const char* password = "YOUR_PASSWORD";
+#define AIO_USERNAME "YOUR_AIO_USERNAME"
+#define AIO_KEY      "YOUR_AIO_KEY"
+#define AIO_SERVER   "io.adafruit.com"
+#define AIO_SERVERPORT 1883
+
+const char* feed_topic = AIO_USERNAME "/feeds/smartled-commands";
 
 // ==========================================
-// Pin Definitions & PWM
+// Pin Definitions (ESP8266 NodeMCU)
 // ==========================================
-const int enaPin = 13;
-const int in1Pin = 12;
-const int in2Pin = 14;
-
-const int freq = 5000;
-const int resolution = 8;
+const int pwmPin = D1; // GPIO 5 - PWM Speed control
+const int dirPin = D2; // GPIO 4 - Direction control
 
 // ==========================================
-// WebSocket Configuration
+// MQTT Client Setup
 // ==========================================
-WebSocketsServer webSocket = WebSocketsServer(81);
+WiFiClient espClient;
+PubSubClient mqtt(espClient);
 
-void webSocketEvent(uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
-  switch (type) {
-    case WStype_DISCONNECTED:
-      Serial.printf("[%u] Disconnected!\n", num);
-      break
-;    case WStype_CONNECTED: {
-      IPAddress ip = webSocket.remoteIP(num);
-      Serial.printf("[%u] Connected from %d.%d.%d.%d\n", num, ip[0], ip[1], ip[2], ip[3]);
-      break;
-    }
-    case WStype_TEXT: {
-      // Parse format: "power,brightness"
-      // Example: "1,255" or "0,127"
-      String data = String((char *)payload);
-      data.trim();
-      
-      int commaIdx = data.indexOf(',');
-      if (commaIdx != -1) {
-        int power = data.substring(0, commaIdx).toInt();
-        int brightness = data.substring(commaIdx + 1).toInt();
-        
-        if (power == 0) {
-          ledcWrite(enaPin, 0);
-          Serial.println("Action: LED OFF");
-        } else {
-          ledcWrite(enaPin, brightness);
-          Serial.printf("Action: LED ON (Brightness: %d)\n", brightness);
-        }
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String data = "";
+  for (unsigned int i = 0; i < length; i++) {
+    data += (char)payload[i];
+  }
+  data.trim();
+  Serial.printf("Received message on topic %s: %s\n", topic, data.c_str());
+
+  if (data == "RESET") {
+    Serial.println("Action: RESET requested. Wiping WiFi settings...");
+    WiFiManager wm;
+    wm.resetSettings();
+    delay(1000);
+    ESP.restart();
+  } else {
+    // Parse format: "power,brightness"
+    // Example: "1,255" or "0,127"
+    int commaIdx = data.indexOf(',');
+    if (commaIdx != -1) {
+      int power = data.substring(0, commaIdx).toInt();
+      int brightness = data.substring(commaIdx + 1).toInt();
+
+      if (power == 0) {
+        analogWrite(pwmPin, 0); // ESP8266 native PWM control
+        Serial.println("Action: Motor/LED OFF");
+      } else {
+        analogWrite(pwmPin, brightness);
+        Serial.printf("Action: Motor/LED ON (Speed/Brightness: %d)\n", brightness);
       }
-      break;
+    }
+  }
+}
+
+void connectMQTT() {
+  // Loop until we're reconnected
+  while (!mqtt.connected()) {
+    Serial.print("Attempting MQTT connection...");
+    // Create a random client ID
+    String clientId = "ESP8266Client-";
+    clientId += String(random(0xffff), HEX);
+    // Attempt to connect
+    if (mqtt.connect(clientId.c_str(), AIO_USERNAME, AIO_KEY)) {
+      Serial.println("connected");
+      // Subscribe to feed
+      mqtt.subscribe(feed_topic);
+      Serial.printf("Subscribed to %s\n", feed_topic);
+    } else {
+      Serial.print("failed, rc=");
+      Serial.print(mqtt.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
   }
 }
 
 void setup() {
   Serial.begin(115200);
- 
-  // Hardware Setup
-  pinMode(in1Pin, OUTPUT);
-  pinMode(in2Pin, OUTPUT);
-  digitalWrite(in1Pin, HIGH);
-  digitalWrite(in2Pin, LOW);
-  ledcAttach(enaPin, freq, resolution);
+  Serial.println("\nStarting SmartLED...");
 
-  // WiFi Connection
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi");
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
+  // Hardware Setup
+  pinMode(dirPin, OUTPUT);
+  pinMode(pwmPin, OUTPUT);
+
+  // Set default direction state and turn off initially
+  digitalWrite(dirPin, HIGH);
+  analogWrite(pwmPin, 0);
+
+  // Force ESP8266 PWM to match 8-bit scale (0-255)
+  analogWriteRange(255);
+
+  // WiFiManager Setup
+  WiFiManager wm;
+  // wm.resetSettings(); // uncomment to force reset during testing
+  
+  Serial.println("Connecting to WiFi via WiFiManager...");
+  if (!wm.autoConnect("SmartLED_Setup", "password123")) {
+    Serial.println("Failed to connect and hit timeout. Restarting...");
+    delay(3000);
+    ESP.restart();
   }
 
-  Serial.println("\n\n✅ WiFi Connected!");
+  Serial.println("\n✅ WiFi Connected Successfully!");
   Serial.print("IP Address: ");
   Serial.println(WiFi.localIP());
-  
-  // Start WebSocket Server
-  webSocket.begin();
-  webSocket.onEvent(webSocketEvent);
-  Serial.println("🔗 Listening for WebSocket connections on port 81");
+
+  // MQTT Server Configuration
+  mqtt.setServer(AIO_SERVER, AIO_SERVERPORT);
+  mqtt.setCallback(mqttCallback);
 }
 
 void loop() {
-  webSocket.loop();
+  if (!mqtt.connected()) {
+    connectMQTT();
+  }
+  mqtt.loop();
 }

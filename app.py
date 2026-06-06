@@ -2,21 +2,33 @@ from flask import Flask, render_template, request, jsonify, Response
 from flask_cors import CORS
 import threading
 import time
-import socket
 import cv2
 import mediapipe as mp
+import paho.mqtt.client as mqtt
 
 app = Flask(__name__)
 CORS(app)
 
-# ── UDP Configuration ──────────────────────────────────────────
-UDP_PORT = 4210
-udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-# Using '<broadcast>' means the signal is sent to EVERY device on your Wi-Fi.
-# You DO NOT need to know the ESP32's IP address! It will just pick it up.
-# If your router blocks broadcasting, replace '<broadcast>' with '192.168.x.x' (your ESP32's IP).
-ESP32_IP = '192.168.0.16'
-udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# ── MQTT Configuration (Adafruit IO) ───────────────────────────
+AIO_USERNAME = os.getenv("AIO_USERNAME", "YOUR_AIO_USERNAME")
+AIO_KEY = os.getenv("AIO_KEY", "YOUR_AIO_KEY")
+AIO_SERVER = "io.adafruit.com"
+AIO_PORT = 1883
+AIO_FEED_TOPIC = f"{AIO_USERNAME}/feeds/smartled-commands"
+
+mqtt_client = mqtt.Client()
+mqtt_client.username_pw_set(AIO_USERNAME, AIO_KEY)
+try:
+    mqtt_client.connect(AIO_SERVER, AIO_PORT)
+    mqtt_client.loop_start()
+    print("✅ Connected to Adafruit IO MQTT Broker")
+except Exception as e:
+    print(f"⚠️ Failed to connect to Adafruit IO: {e}")
 
 # ── Hardware State & Video ─────────────────────────────────────
 # power: 1=ON, 0=OFF
@@ -31,13 +43,13 @@ latest_frame = None
 frame_lock = threading.Lock()
 
 def update_hardware():
-    """Broadcasts state over UDP to the ESP32"""
+    """Publishes state over MQTT to Adafruit IO"""
     with state_lock:
-        payload = f"{bot_state['power']},{bot_state['brightness']}\n"
+        payload = f"{bot_state['power']},{bot_state['brightness']}"
     try:
-        udp_socket.sendto(payload.encode('utf-8'), (ESP32_IP, UDP_PORT))
+        mqtt_client.publish(AIO_FEED_TOPIC, payload, qos=1)
     except Exception as e:
-        print(f"⚠️ UDP write error: {e}")
+        print(f"⚠️ MQTT publish error: {e}")
 
 # ── Local Vision Loop ──────────────────────────────────────────
 def count_fingers(landmarks, handedness_label):
@@ -199,6 +211,16 @@ def update_led():
     print(f"🎙️ Voice/Web Command Received -> LED {action}, Brightness {bot_state['brightness']}")
     return jsonify({'success': True, 'state': bot_state})
 
+@app.route('/reset-device', methods=['POST'])
+def reset_device():
+    """Endpoint called by frontend to wipe ESP8266 Wi-Fi settings."""
+    try:
+        mqtt_client.publish(AIO_FEED_TOPIC, "RESET", qos=1)
+        print("🔄 Sent RESET command to ESP via MQTT")
+        return jsonify({'success': True, 'message': 'Reset command sent'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 # ── Main ───────────────────────────────────────────────────────
 import os
 if __name__ == '__main__':
@@ -210,7 +232,7 @@ if __name__ == '__main__':
     protocol = 'https' if use_ssl else 'http'
 
     print("\n🌟 Smart LED Backend Engine")
-    print(f"   Wireless: ✅ UDP Broadcast on port {UDP_PORT}")
+    print(f"   Wireless: ✅ MQTT via Adafruit IO")
     print(f"   Frontend: 🌐 {protocol}://0.0.0.0:5000\n")
     
     # Start vision loop in a background thread to mimic NavisLLM

@@ -249,6 +249,12 @@
         Note: The Python backend automatically runs local hand gesture recognition using your computer's webcam. <br>Show 1-5 fingers to set brightness, or a fist to turn off.
     </div>
 
+    <div style="margin-top: 30px; text-align: center;">
+        <button class="manual-btn danger" style="padding: 10px 20px; font-size: 1rem; border-radius: 8px;" onclick="resetDevice()">
+            Reset Device Wi-Fi
+        </button>
+    </div>
+
     <script>
         const statusPulse = document.getElementById('statusPulse');
         const sysStatus = document.getElementById('sysStatus');
@@ -279,6 +285,18 @@
                 });
             } catch (e) {
                 console.error("API Error", e);
+            }
+        }
+
+        async function resetDevice() {
+            if (confirm("Are you sure you want to wipe the ESP8266's Wi-Fi credentials? This will restart the device in setup mode.")) {
+                try {
+                    await fetch('/reset-device', { method: 'POST' });
+                    alert("Reset command sent. The device will restart shortly.");
+                } catch (e) {
+                    console.error("Error resetting device:", e);
+                    alert("Failed to send reset command.");
+                }
             }
         }
 

@@ -1,7 +1,6 @@
 // --- DOM Elements ---
 const connectionScreen = document.getElementById('connection-screen');
 const mainScreen = document.getElementById('main-screen');
-const ipInput = document.getElementById('ip-input');
 const connectBtn = document.getElementById('connect-btn');
 const disconnectBtn = document.getElementById('disconnect-btn');
 const connectionStatus = document.getElementById('connection-status');
@@ -17,10 +16,16 @@ const canvasCtx = canvasElement.getContext('2d');
 const powerBtn = document.getElementById('power-btn');
 const brightnessSlider = document.getElementById('brightness-slider');
 const sliderPctLabel = document.getElementById('slider-pct-label');
+const resetDeviceBtn = document.getElementById('reset-device-btn');
+
+// --- Adafruit IO MQTT Config ---
+// AIO_USERNAME and AIO_KEY are loaded from config.js
+const AIO_SERVER = "io.adafruit.com";
+const AIO_PORT = 443;
+const AIO_FEED_TOPIC = `${AIO_USERNAME}/feeds/smartled-commands`;
 
 // --- State ---
-let ws = null;
-let ESP32_IP = localStorage.getItem('esp32_ip') || '';
+let mqttClient = null;
 let botState = { power: 1, brightness: 127 };
 let lastActionTime = 0;
 let stableFingers = -1;
@@ -29,60 +34,72 @@ let isListening = false;
 let facingMode = 'user'; // 'user' (front) or 'environment' (back)
 let camera = null;
 
-// Initialize Input
-ipInput.value = ESP32_IP;
-
-// --- WebSocket Logic ---
+// --- MQTT Logic ---
 connectBtn.addEventListener('click', () => {
-    ESP32_IP = ipInput.value.trim();
-    if (!ESP32_IP) {
-        connectionStatus.textContent = "Please enter an IP address.";
-        return;
-    }
-    
-    connectionStatus.textContent = "Connecting...";
+    connectionStatus.textContent = "Connecting to Adafruit IO...";
     connectionStatus.style.color = "var(--text-muted)";
     
-    // Connect to WebSocket Server (Port 81 is configured in Arduino)
-    ws = new WebSocket(`ws://${ESP32_IP}:81/`);
-    
-    ws.onopen = () => {
-        console.log("Connected to ESP32 WebSocket");
-        localStorage.setItem('esp32_ip', ESP32_IP);
-        connectionScreen.classList.remove('active');
-        mainScreen.classList.add('active');
-        startCamera();
-        sendState();
-    };
-    
-    ws.onclose = () => {
-        console.log("Disconnected from ESP32 WebSocket");
+    const clientId = "SmartLED_PWA_" + Math.random().toString(16).substring(2, 10);
+    mqttClient = new Paho.MQTT.Client(AIO_SERVER, AIO_PORT, "/mqtt", clientId);
+
+    mqttClient.onConnectionLost = (responseObject) => {
+        console.log("Disconnected from Adafruit IO", responseObject);
         mainScreen.classList.remove('active');
         connectionScreen.classList.add('active');
         connectionStatus.textContent = "Disconnected. Try again.";
         connectionStatus.style.color = "var(--danger)";
         stopCamera();
     };
-    
-    ws.onerror = (error) => {
-        console.error("WebSocket Error:", error);
-        connectionStatus.textContent = "Connection failed. Check IP.";
-        connectionStatus.style.color = "var(--danger)";
+
+    const options = {
+        useSSL: true,
+        userName: AIO_USERNAME,
+        password: AIO_KEY,
+        onSuccess: () => {
+            console.log("Connected to Adafruit IO MQTT");
+            connectionScreen.classList.remove('active');
+            mainScreen.classList.add('active');
+            startCamera();
+            sendState();
+        },
+        onFailure: (message) => {
+            console.error("MQTT Connection failed:", message);
+            connectionStatus.textContent = "Connection failed.";
+            connectionStatus.style.color = "var(--danger)";
+        }
     };
+
+    mqttClient.connect(options);
 });
 
 disconnectBtn.addEventListener('click', () => {
-    if (ws) ws.close();
+    if (mqttClient) mqttClient.disconnect();
 });
 
 function sendState() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        // Format: "power,brightness"
+    if (mqttClient && mqttClient.isConnected()) {
         const payload = `${botState.power},${botState.brightness}`;
-        ws.send(payload);
+        const message = new Paho.MQTT.Message(payload);
+        message.destinationName = AIO_FEED_TOPIC;
+        message.qos = 1;
+        mqttClient.send(message);
         updateUI();
     }
 }
+
+resetDeviceBtn.addEventListener('click', () => {
+    if (confirm("Are you sure you want to wipe the ESP8266's Wi-Fi credentials? This will restart the device in setup mode.")) {
+        if (mqttClient && mqttClient.isConnected()) {
+            const message = new Paho.MQTT.Message("RESET");
+            message.destinationName = AIO_FEED_TOPIC;
+            message.qos = 1;
+            mqttClient.send(message);
+            alert("Reset command sent. The device will restart shortly.");
+        } else {
+            alert("Not connected to MQTT.");
+        }
+    }
+});
 
 function updateUI() {
     const p = (botState.power === 1 && botState.brightness > 0) ? (botState.brightness / 255) * 100 : 0;
