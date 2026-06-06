@@ -22,7 +22,7 @@ const resetDeviceBtn = document.getElementById('reset-device-btn');
 // AIO_USERNAME and AIO_KEY are loaded from config.js
 const AIO_SERVER = "io.adafruit.com";
 const AIO_PORT = 443;
-const AIO_FEED_TOPIC = `${AIO_USERNAME}/feeds/smartled-commands`;
+const AIO_FEED_TOPIC = `${AIO_USERNAME}/Feeds/smartled-commands`;
 
 // --- State ---
 let mqttClient = null;
