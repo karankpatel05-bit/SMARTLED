@@ -40,7 +40,8 @@ connectBtn.addEventListener('click', () => {
     connectionStatus.style.color = "var(--text-muted)";
     
     const clientId = "SmartLED_PWA_" + Math.random().toString(16).substring(2, 10);
-    mqttClient = new Paho.MQTT.Client(AIO_SERVER, AIO_PORT, "/mqtt", clientId);
+    // Paho MQTT over WSS: host, port, path, clientId
+    mqttClient = new Paho.MQTT.Client("io.adafruit.com", 443, "/mqtt", clientId);
 
     mqttClient.onConnectionLost = (responseObject) => {
         console.log("Disconnected from Adafruit IO", responseObject);

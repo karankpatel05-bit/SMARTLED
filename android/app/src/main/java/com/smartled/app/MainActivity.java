@@ -36,6 +36,11 @@ public class MainActivity extends Activity {
         settings.setAllowFileAccess(true);
         settings.setAllowContentAccess(true);
 
+        // Critical: allow file:// pages to make WSS/XHR requests to external servers
+        // Without this, Adafruit IO MQTT over WebSockets will be blocked
+        settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+
         // Grant microphone permission to WebView automatically
         // This allows SpeechRecognition (Web Speech API) to work
         webView.setWebChromeClient(new WebChromeClient() {
