@@ -19,7 +19,7 @@ AIO_USERNAME = os.getenv("AIO_USERNAME", "YOUR_AIO_USERNAME")
 AIO_KEY = os.getenv("AIO_KEY", "YOUR_AIO_KEY")
 AIO_SERVER = "io.adafruit.com"
 AIO_PORT = 1883
-AIO_FEED_TOPIC = f"{AIO_USERNAME}/feeds/smartled-commands"
+AIO_FEED_TOPIC = f"{AIO_USERNAME}/Feeds/smartled-commands"
 
 mqtt_client = mqtt.Client()
 mqtt_client.username_pw_set(AIO_USERNAME, AIO_KEY)
