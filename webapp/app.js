@@ -25,34 +25,35 @@ const selectedDeviceLabel  = document.getElementById('selected-device-label');
 const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-registry/data/last`;
 
 function deviceFeedUrl(deviceId) {
+    if (deviceId === 'all') return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-all/data`;
     return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-${deviceId}/data`;
 }
 
-// Per-device rate-limiter state (Adafruit IO free: max 30 points/min)
-const _pub = {};
-
+// Proper queueing so commands don't drop when button is pressed rapidly
+const _pubQueue = {};
 async function publishToDevice(deviceId, value) {
-    if (!_pub[deviceId]) _pub[deviceId] = { busy: false, last: 0 };
-    const s = _pub[deviceId];
-    if (s.busy) return false;
-    const wait = 2000 - (Date.now() - s.last);
-    if (wait > 0) await new Promise(r => setTimeout(r, wait));
-    s.busy = true;
-    s.last = Date.now();
-    try {
-        const res = await fetch(deviceFeedUrl(deviceId), {
-            method: 'POST',
-            headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ value })
-        });
-        if (!res.ok) { console.error('Publish failed:', await res.text()); return false; }
-        return true;
-    } catch(e) {
-        console.error('Publish error:', e);
-        return false;
-    } finally {
-        s.busy = false;
-    }
+    if (!_pubQueue[deviceId]) _pubQueue[deviceId] = Promise.resolve();
+    
+    _pubQueue[deviceId] = _pubQueue[deviceId].then(async () => {
+        try {
+            const res = await fetch(deviceFeedUrl(deviceId), {
+                method: 'POST',
+                headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ value })
+            });
+            if (!res.ok) console.error('Publish failed:', await res.text());
+            
+            // Wait 2s to comply with Adafruit IO rate limits before next publish
+            await new Promise(r => setTimeout(r, 2000));
+            return res.ok;
+        } catch(e) {
+            console.error('Publish error:', e);
+            await new Promise(r => setTimeout(r, 2000));
+            return false;
+        }
+    });
+    
+    return _pubQueue[deviceId];
 }
 
 // ===========================================
@@ -117,6 +118,11 @@ function renderDeviceCard(device) {
     const noMsg = dashboard.querySelector('.no-devices-msg');
     if (noMsg) noMsg.remove();
 
+    // Ensure Global Card is rendered first
+    if (!document.getElementById('card-all')) {
+        renderGlobalCard();
+    }
+
     const state = deviceStates[device.id];
     const pct   = Math.round((state.brightness / 255) * 100);
     const isOn  = state.power === 1 && state.brightness > 0;
@@ -156,6 +162,69 @@ function renderDeviceCard(device) {
     `;
     dashboard.appendChild(card);
     attachCardListeners(device);
+}
+
+function renderGlobalCard() {
+    const card = document.createElement('div');
+    const isSel = selectedId === 'all';
+    card.className = `device-card${isSel ? ' selected' : ''}`;
+    card.id = `card-all`;
+    card.style.border = '2px solid var(--primary)';
+    card.style.background = 'rgba(59, 130, 246, 0.1)';
+
+    card.innerHTML = `
+        <div class="device-card-header">
+            <div class="device-info">
+                <i class="ph ph-globe-hemisphere-west device-icon"></i>
+                <div>
+                    <div class="device-name">Global Control</div>
+                    <div class="device-id">Control all devices simultaneously</div>
+                </div>
+            </div>
+            <div class="device-card-actions">
+                <button class="select-btn ${isSel ? 'active' : ''}" id="select-all" title="Select for gesture & voice">
+                    <i class="ph ph-cursor-click"></i>
+                </button>
+            </div>
+        </div>
+        <div class="slider-row" style="margin-top:0.75rem;">
+            <i class="ph ph-sun-dim slider-icon"></i>
+            <input type="range" class="brightness-slider" id="slider-all" min="0" max="255" value="127">
+            <i class="ph ph-sun slider-icon"></i>
+        </div>
+        <div class="slider-label"><span id="pct-all">50%</span></div>
+    `;
+    dashboard.insertBefore(card, dashboard.firstChild);
+
+    // Select for gesture/voice targeting
+    document.getElementById(`select-all`).addEventListener('click', () => {
+        selectedId = 'all';
+        document.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`card-all`).classList.add('selected');
+        document.getElementById(`select-all`).classList.add('active');
+        updateGlobalStatusBar();
+    });
+
+    // Global Brightness slider (debounced)
+    let globalSliderTimer = null;
+    document.getElementById(`slider-all`).addEventListener('input', () => {
+        const val = parseInt(document.getElementById(`slider-all`).value);
+        const power = val > 0 ? 1 : 0;
+        document.getElementById(`pct-all`).textContent = `${Math.round((val / 255) * 100)}%`;
+        
+        // Also update local states visually
+        knownDevices.forEach(d => {
+            deviceStates[d.id].brightness = val;
+            deviceStates[d.id].power = power;
+            updateCardUI(d.id);
+        });
+
+        clearTimeout(globalSliderTimer);
+        globalSliderTimer = setTimeout(() => {
+            publishToDevice('all', `${power},${val}`);
+        }, 500);
+    });
 }
 
 function attachCardListeners(device) {
@@ -255,9 +324,22 @@ function renderDashboard() {
 // Gesture / Voice → selected device
 function sendToSelected(power, brightness) {
     if (!selectedId) return;
-    deviceStates[selectedId] = { power, brightness };
-    updateCardUI(selectedId);
-    publishToDevice(selectedId, `${power},${brightness}`);
+    if (selectedId === 'all') {
+        knownDevices.forEach(d => {
+            deviceStates[d.id] = { power, brightness };
+            updateCardUI(d.id);
+        });
+        const globalSlider = document.getElementById('slider-all');
+        if (globalSlider) globalSlider.value = brightness;
+        const globalPct = document.getElementById('pct-all');
+        if (globalPct) globalPct.textContent = `${Math.round((brightness / 255) * 100)}%`;
+        publishToDevice('all', `${power},${brightness}`);
+        updateGlobalStatusBar();
+    } else {
+        deviceStates[selectedId] = { power, brightness };
+        updateCardUI(selectedId);
+        publishToDevice(selectedId, `${power},${brightness}`);
+    }
 }
 
 // ===========================================
