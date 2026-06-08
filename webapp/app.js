@@ -78,6 +78,26 @@ async function pollRegistry() {
         );
         if (!name || !name.trim()) return;
 
+        // --- AUTO-PROVISIONING (Phone acting as Manager) ---
+        const feedKey = `smartled-${newId}`;
+        try {
+            const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
+                headers: { 'X-AIO-Key': AIO_KEY }
+            });
+            if (checkRes.status === 404) {
+                console.log(`🚀 Creating feed for ${newId} from PWA...`);
+                await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds`, {
+                    method: 'POST',
+                    headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
+                    })
+                });
+            }
+        } catch (e) {
+            console.error('Failed to auto-create feed:', e);
+        }
+
         const device = { id: newId, name: name.trim() };
         knownDevices.push(device);
         localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
