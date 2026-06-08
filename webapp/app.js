@@ -22,7 +22,7 @@ const selectedDeviceLabel  = document.getElementById('selected-device-label');
 // Adafruit IO REST API Helpers
 // AIO_USERNAME and AIO_KEY are loaded from config.js
 // ===========================================
-const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-registry/data/last`;
+const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-registry/data`;
 
 function deviceFeedUrl(deviceId) {
     if (deviceId === 'all') return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-all/data`;
@@ -70,42 +70,52 @@ async function pollRegistry() {
     try {
         const res = await fetch(AIO_REGISTRY_URL, { headers: { 'X-AIO-Key': AIO_KEY } });
         if (!res.ok) return;
-        const data = await res.json();
-        const newId = data?.value?.trim();
-        if (!newId || knownDevices.find(d => d.id === newId)) return;
+        const dataArray = await res.json();
+        
+        // Extract unique IDs from the recent history of pings
+        const uniqueIds = [...new Set(dataArray.map(d => d?.value?.trim()).filter(v => v))];
 
-        const name = prompt(
-            `🔍 New SmartLED discovered!\nDevice ID: ${newId}\n\nWhat would you like to name it? (e.g., Living Room)`
-        );
-        if (!name || !name.trim()) return;
+        for (const newId of uniqueIds) {
+            // If device is already known, skip
+            if (knownDevices.find(d => d.id === newId)) continue;
 
-        // --- AUTO-PROVISIONING (Phone acting as Manager) ---
-        const feedKey = `smartled-${newId}`;
-        try {
-            const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
-                headers: { 'X-AIO-Key': AIO_KEY }
-            });
-            if (checkRes.status === 404) {
-                console.log(`🚀 Creating feed for ${newId} from PWA...`);
-                await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds`, {
-                    method: 'POST',
-                    headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
-                    })
+            const macDisplay = newId.toUpperCase().match(/.{1,2}/g)?.join(':') || newId;
+
+            const name = prompt(
+                `🔍 New SmartLED discovered!\nMAC Address: ${macDisplay}\n\nWhat would you like to name it? (e.g., Living Room)`
+            );
+            
+            // If they cancel or leave it blank, skip to the next one
+            if (!name || !name.trim()) continue;
+
+            // --- AUTO-PROVISIONING (Phone acting as Manager) ---
+            const feedKey = `smartled-${newId}`;
+            try {
+                const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
+                    headers: { 'X-AIO-Key': AIO_KEY }
                 });
+                if (checkRes.status === 404) {
+                    console.log(`🚀 Creating feed for ${newId} from PWA...`);
+                    await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds`, {
+                        method: 'POST',
+                        headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
+                        })
+                    });
+                }
+            } catch (e) {
+                console.error('Failed to auto-create feed:', e);
             }
-        } catch (e) {
-            console.error('Failed to auto-create feed:', e);
-        }
 
-        const device = { id: newId, name: name.trim() };
-        knownDevices.push(device);
-        localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
-        deviceStates[device.id] = { power: 1, brightness: 127 };
-        if (!selectedId) { selectedId = device.id; }
-        renderDeviceCard(device);
-        updateGlobalStatusBar();
+            const device = { id: newId, name: name.trim() };
+            knownDevices.push(device);
+            localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
+            deviceStates[device.id] = { power: 1, brightness: 127 };
+            if (!selectedId || selectedId === 'all') { selectedId = device.id; }
+            renderDeviceCard(device);
+            updateGlobalStatusBar();
+        }
     } catch(e) {
         console.error('Registry poll error:', e);
     }
@@ -132,13 +142,15 @@ function renderDeviceCard(device) {
     card.className = `device-card${isSel ? ' selected' : ''}`;
     card.id = `card-${device.id}`;
 
+    const macFormat = device.id.toUpperCase().match(/.{1,2}/g)?.join(':') || device.id;
+
     card.innerHTML = `
         <div class="device-card-header">
             <div class="device-info">
                 <i class="ph ph-lightbulb device-icon${isOn ? '' : ' off'}"></i>
                 <div>
                     <div class="device-name">${device.name}</div>
-                    <div class="device-id">ID: ${device.id.slice(-6).toUpperCase()}</div>
+                    <div class="device-id">MAC: ${macFormat}</div>
                 </div>
             </div>
             <div class="device-card-actions">
