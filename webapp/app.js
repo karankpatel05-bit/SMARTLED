@@ -128,8 +128,8 @@ function renderDeviceCard(device) {
     const noMsg = dashboard.querySelector('.no-devices-msg');
     if (noMsg) noMsg.remove();
 
-    // Ensure Global Card is rendered first
-    if (!document.getElementById('card-all')) {
+    // Ensure Global Card is rendered first, ONLY if there's >1 device
+    if (knownDevices.length > 1 && !document.getElementById('card-all')) {
         renderGlobalCard();
     }
 
