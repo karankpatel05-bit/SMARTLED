@@ -24,7 +24,21 @@ const AIO_FEED_KEY = "smartled-commands";
 const AIO_REST_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${AIO_FEED_KEY}/data`;
 
 // Publish a value to Adafruit IO via REST API (no WebSocket needed)
+// Throttled: Adafruit IO free tier = max 30 points/min (1 per 2s)
+let _publishing = false;
+let _lastPublish = 0;
+const AIO_MIN_INTERVAL_MS = 2000; // 2 seconds minimum between publishes
+
 async function publishToAIO(value) {
+    // Prevent concurrent requests
+    if (_publishing) return false;
+    // Enforce rate limit
+    const now = Date.now();
+    const wait = AIO_MIN_INTERVAL_MS - (now - _lastPublish);
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+
+    _publishing = true;
+    _lastPublish = Date.now();
     try {
         const response = await fetch(AIO_REST_URL, {
             method: 'POST',
@@ -43,6 +57,8 @@ async function publishToAIO(value) {
     } catch (e) {
         console.error('AIO fetch error:', e);
         return false;
+    } finally {
+        _publishing = false;
     }
 }
 
@@ -135,14 +151,20 @@ powerBtn.addEventListener('click', () => {
     sendState();
 });
 
+// Debounce timer for slider - only sends final value after user stops moving
+let _sliderTimer = null;
+
 brightnessSlider.addEventListener('input', () => {
     const val = parseInt(brightnessSlider.value);
     botState.brightness = val;
-    // Auto-power on if slider moved above 0 from an off state
     if (val > 0) botState.power = 1;
     else botState.power = 0;
     sliderPctLabel.textContent = `${Math.round((val / 255) * 100)}%`;
-    sendState();
+    // Update UI immediately (feels responsive)
+    updateUI();
+    // But only publish 500ms after the user STOPS dragging
+    clearTimeout(_sliderTimer);
+    _sliderTimer = setTimeout(() => sendState(), 500);
 });
 
 // --- MediaPipe Hands Logic ---
