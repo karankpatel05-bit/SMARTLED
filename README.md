@@ -1,90 +1,88 @@
-# Smart LED Controller 🚀
+# Smart LED Controller (Global Fleet Edition) 🚀
 
-An advanced, AI-powered Smart LED controller using an **ESP32**, **MediaPipe** (Hand Tracking), and the **Web Speech API** (Voice Recognition). 
+An advanced, AI-powered Smart LED and motor controller system built for global, low-latency control using **Adafruit IO MQTT**. It features an **Android PWA (Progressive Web App)** with an integrated **MediaPipe Hand Gesture Dashboard**, **Voice Recognition**, and a **"Fleet Ping" Auto-Discovery** architecture.
 
-The heavy lifting (AI processing) is done locally on your PC using a Flask backend, which then instantly transmits `UDP Broadcasts` to your ESP32 with zero latency. You do NOT even need to know your ESP32's IP address!
-
----
-
-## 🛠️ Hardware Requirements
-- **ESP32** Microcontroller
-- **L298N** Motor Driver
-- **LED Module** (connected to the L298N output pins)
-- Your PC/Laptop (with a webcam and microphone)
+You can now control an infinite fleet of LED strips globally from your smartphone!
 
 ---
 
-## 🚀 Setup Instructions (Windows)
+## 🏗️ Architecture
 
-### 1. Flash the ESP32
-1. Open `smart_led.ino` in the Arduino IDE.
-2. Change the `ssid` and `password` variables to match your local Wi-Fi.
-3. Select your ESP32 board and COM port, then click **Upload**.
-4. *(The ESP32 will now blindly listen on UDP port 4210 for incoming brightness commands).*
+This project is divided into three main components:
 
-### 2. Install Python Dependencies
-You must have Python 3 installed on your Windows machine.
-1. Open Command Prompt (`cmd`) or PowerShell.
-2. Clone or download this repository.
-3. Navigate to the project directory:
-   ```cmd
-   cd path\to\SMARTLED
+1. **The Firmware (ESP8266 NodeMCU):**
+   Connects to Wi-Fi via a captive portal (`WiFiManager`), connects to Adafruit IO MQTT, and listens for device-specific commands to adjust PWM signals.
+2. **The Android PWA (Frontend):**
+   Runs entirely on your smartphone browser (or compiled to an APK via GitHub Actions). Captures webcam data, runs MediaPipe AI locally on the phone to detect gestures, translates voice commands, and publishes REST API calls to Adafruit IO.
+3. **The Python Backend (Provisioning Manager):**
+   Runs on a server (or PC) to listen to the global `smartled-registry` MQTT feed. When a new ESP8266 comes online for the first time, it intercepts the ping and uses Adafruit IO's REST API to dynamically generate the required database feeds on the fly!
+
+---
+
+## 🛠️ Hardware Setup
+
+- **ESP8266 NodeMCU** (The microcontroller)
+- **L298N** Motor Driver (or a simple MOSFET for LEDs)
+- **LED Module / DC Motor** (connected to the output pins)
+- Your Smartphone (for the PWA dashboard)
+
+---
+
+## 🚀 Setup Instructions
+
+### 1. Adafruit IO Configuration
+1. Create a free account at [io.adafruit.com](https://io.adafruit.com).
+2. Go to **Feeds** and manually create TWO feeds:
+   - `smartled-registry`
+   - `smartled-all`
+3. Get your **AIO Username** and **AIO Key** from the yellow key button in the top right.
+
+### 2. Run the Provisioning Manager (Python Backend)
+This backend listens for new devices and creates their feeds automatically.
+1. Create a `.env` file in the project root:
+   ```env
+   AIO_USERNAME=your_username
+   AIO_KEY=your_aio_key
    ```
-4. Create a virtual environment (recommended):
-   ```cmd
-   python -m venv venv
-   ```
-5. Activate the virtual environment:
-   ```cmd
-   venv\Scripts\activate
-   ```
-6. Install the required packages:
-   ```cmd
+2. Install dependencies and run:
+   ```bash
    pip install -r requirements.txt
-   ```
-
-### 3. Run the AI Backend
-1. Ensure your virtual environment is activated.
-2. Start the Flask server:
-   ```cmd
    python app.py
    ```
-3. Look at your terminal! It should say `👁️ Vision loop started` and turn on your webcam.
+*(Leave this running in the background).*
 
-### 4. Open the Web Interface
-1. Open your web browser and navigate to: **http://localhost:5000**
-2. **Gesture Control:** Hold your hand up to your webcam! 
+### 3. Flash the ESP8266
+1. Open `smart_led.ino` in the Arduino IDE.
+2. Update lines 8 and 9 with your Adafruit IO credentials:
+   ```cpp
+   #define AIO_USERNAME "your_username"
+   #define AIO_KEY      "your_aio_key"
+   ```
+3. Upload to your ESP8266.
+4. On your phone, connect to the Wi-Fi network `SmartLED_Setup` and enter your home Wi-Fi credentials.
+5. The ESP8266 will boot, connect to Adafruit IO, and send a **Fleet Ping**.
+6. Watch your Python backend terminal — it will detect the ping and automatically create the specific feed for this device!
+
+### 4. Open the Android PWA
+1. Open the `webapp` folder. (Or wait for the GitHub Action to build your `.apk`).
+2. The UI will dynamically generate a device card.
+3. It will ask you to name the newly discovered device (e.g., "Living Room").
+4. **Select** the device by tapping the cursor icon on its card.
+5. **Gesture Control:** Hold your hand up to your front camera! 
    - 1 finger = 20% brightness
    - 5 fingers = 100% brightness
    - Closed fist = OFF
-3. **Voice Control:** Click the microphone icon on the webpage and say commands like `"Turn on"`, `"Turn off"`, or `"Set to 50%"`.
-
-*(Note: If you want to access the microphone from a smartphone over your local network, you will need to host the Flask app on HTTPS by generating an SSL certificate).*
+6. **Voice Control:** Tap the microphone icon and say `"Turn on"`, `"Turn off"`, or `"Set to 50%"`.
 
 ---
 
-## 🚀 Setup Instructions (Linux / macOS)
+## 🧠 How Auto-Discovery Works
 
-1. Flash the ESP32 using Arduino IDE just like the Windows steps.
-2. Open a terminal and navigate to the folder.
-3. Create and activate a virtual environment:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate
-   ```
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-5. Run the app:
-   ```bash
-   python app.py
-   ```
+Because Adafruit IO restricts automatic feed generation on free accounts, this system implements a custom Provisioning Bridge:
 
----
+1. **ESP8266 Boot:** Reads its own MAC Address (e.g., `84cca8a01234`).
+2. **Fleet Ping:** Publishes its MAC Address to the master `smartled-registry` feed.
+3. **Interception:** `app.py` sees the ping. It checks Adafruit IO via the REST API. If the feed `smartled-84cca8a01234` does not exist, it instantly creates it.
+4. **PWA Discovery:** The phone app polls the registry, sees the new MAC Address, prompts the user for a friendly name, and renders the UI controls.
 
-## 🧠 How it Works
-1. **app.py** captures your webcam stream via OpenCV.
-2. **MediaPipe** analyzes the video in real-time to count your fingers.
-3. When a gesture is detected, Python formats a string like `1,255\n` (Power=1, Brightness=255) and blasts it over your Wi-Fi network using a UDP broadcast (`<broadcast>:4210`).
-4. The **ESP32** immediately intercepts the broadcast and adjusts the PWM signal sent to the L298N motor driver. No HTTP handshakes, no slow API requests. Instant control.
+No manual configuration required after the initial setup!
