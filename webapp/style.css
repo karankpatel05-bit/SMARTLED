@@ -413,3 +413,118 @@ canvas {
     font-weight: 600;
     color: var(--text-muted);
 }
+
+/* ==========================================
+   Fleet Dashboard — Device Cards
+   ========================================== */
+#dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.device-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    transition: border-color 0.25s;
+}
+
+.device-card.selected {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.device-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.device-icon {
+    font-size: 1.75rem;
+    color: #eab308;
+    filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.5));
+    transition: all 0.3s;
+}
+
+.device-icon.off {
+    color: var(--text-muted);
+    filter: none;
+}
+
+.device-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.device-id {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.device-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.select-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-muted);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.select-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.reset-btn {
+    margin-top: 0.75rem;
+    width: 100%;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 10px;
+    color: #ef4444;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background 0.2s;
+}
+
+.reset-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
+.no-devices-msg {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1.5rem 0;
+}
+

@@ -10,114 +10,132 @@
 #define AIO_SERVER   "io.adafruit.com"
 #define AIO_SERVERPORT 1883
 
-const char* feed_topic = AIO_USERNAME "/feeds/smartled-commands";
-
 // ==========================================
 // Pin Definitions (ESP8266 NodeMCU)
 // ==========================================
-const int pwmPin = D1; // GPIO 5 - PWM Speed control
-const int dirPin = D2; // GPIO 4 - Direction control
+const int pwmPin = D1; // GPIO 5 - PWM / Brightness
+const int dirPin = D2; // GPIO 4 - Direction
 
 // ==========================================
-// MQTT Client Setup
+// Device Identity (derived from MAC address)
+// ==========================================
+String deviceID;         // e.g. "aabbccddeeff"
+String deviceFeedTopic;  // AIO_USERNAME/feeds/smartled-aabbccddeeff
+String globalFeedTopic;  // AIO_USERNAME/feeds/smartled-all
+
+// ==========================================
+// MQTT Client
 // ==========================================
 WiFiClient espClient;
 PubSubClient mqtt(espClient);
 
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String data = "";
-  for (unsigned int i = 0; i < length; i++) {
-    data += (char)payload[i];
-  }
+void applyCommand(String data) {
   data.trim();
-  Serial.printf("Received message on topic %s: %s\n", topic, data.c_str());
-
   if (data == "RESET") {
-    Serial.println("Action: RESET requested. Wiping WiFi settings...");
+    Serial.println("RESET requested — wiping WiFi settings...");
     WiFiManager wm;
     wm.resetSettings();
     delay(1000);
     ESP.restart();
   } else {
-    // Parse format: "power,brightness"
-    // Example: "1,255" or "0,127"
     int commaIdx = data.indexOf(',');
     if (commaIdx != -1) {
-      int power = data.substring(0, commaIdx).toInt();
+      int power      = data.substring(0, commaIdx).toInt();
       int brightness = data.substring(commaIdx + 1).toInt();
-
       if (power == 0) {
-        analogWrite(pwmPin, 0); // ESP8266 native PWM control
-        Serial.println("Action: Motor/LED OFF");
+        analogWrite(pwmPin, 0);
+        Serial.println("LED OFF");
       } else {
         analogWrite(pwmPin, brightness);
-        Serial.printf("Action: Motor/LED ON (Speed/Brightness: %d)\n", brightness);
+        Serial.printf("LED ON  brightness=%d\n", brightness);
       }
     }
   }
 }
 
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String data = "";
+  for (unsigned int i = 0; i < length; i++) data += (char)payload[i];
+  Serial.printf("[MQTT] topic=%s  payload=%s\n", topic, data.c_str());
+  applyCommand(data);
+}
+
+// ==========================================
+// Non-blocking MQTT reconnect
+// ==========================================
+unsigned long lastMQTTAttempt = 0;
+const unsigned long MQTT_RETRY_INTERVAL = 5000;
+
 void connectMQTT() {
-  // Loop until we're reconnected
-  while (!mqtt.connected()) {
-    Serial.print("Attempting MQTT connection...");
-    // Create a random client ID
-    String clientId = "ESP8266Client-";
-    clientId += String(random(0xffff), HEX);
-    // Attempt to connect
-    if (mqtt.connect(clientId.c_str(), AIO_USERNAME, AIO_KEY)) {
-      Serial.println("connected");
-      // Subscribe to feed
-      mqtt.subscribe(feed_topic);
-      Serial.printf("Subscribed to %s\n", feed_topic);
-    } else {
-      Serial.print("failed, rc=");
-      Serial.print(mqtt.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+  if (millis() - lastMQTTAttempt < MQTT_RETRY_INTERVAL) return;
+  lastMQTTAttempt = millis();
+
+  Serial.print("MQTT connecting... ");
+  String clientId = "SmartLED-" + deviceID;
+
+  if (mqtt.connect(clientId.c_str(), AIO_USERNAME, AIO_KEY)) {
+    Serial.println("connected!");
+
+    // 1. Fleet ping — broadcast device ID to registry feed
+    String registryTopic = String(AIO_USERNAME) + "/feeds/smartled-registry";
+    mqtt.publish(registryTopic.c_str(), deviceID.c_str());
+    Serial.printf("Registry ping sent: %s\n", deviceID.c_str());
+
+    // 2. Subscribe to this device's specific command feed
+    mqtt.subscribe(deviceFeedTopic.c_str());
+    Serial.printf("Subscribed: %s\n", deviceFeedTopic.c_str());
+
+    // 3. Subscribe to global broadcast feed
+    mqtt.subscribe(globalFeedTopic.c_str());
+    Serial.printf("Subscribed: %s\n", globalFeedTopic.c_str());
+
+  } else {
+    Serial.printf("failed rc=%d, retry in 5s\n", mqtt.state());
   }
 }
 
+// ==========================================
+// Setup
+// ==========================================
 void setup() {
   Serial.begin(115200);
   Serial.println("\nStarting SmartLED...");
 
-  // Hardware Setup
   pinMode(dirPin, OUTPUT);
   pinMode(pwmPin, OUTPUT);
-
-  // Set default direction state and turn off initially
   digitalWrite(dirPin, HIGH);
   analogWrite(pwmPin, 0);
-
-  // Force ESP8266 PWM to match 8-bit scale (0-255)
   analogWriteRange(255);
 
-  // WiFiManager Setup
   WiFiManager wm;
-  // wm.resetSettings(); // uncomment to force reset during testing
-  
-  Serial.println("Connecting to WiFi via WiFiManager...");
+  Serial.println("WiFiManager starting...");
   if (!wm.autoConnect("SmartLED_Setup", "password123")) {
-    Serial.println("Failed to connect and hit timeout. Restarting...");
+    Serial.println("WiFi failed — restarting");
     delay(3000);
     ESP.restart();
   }
 
-  Serial.println("\n✅ WiFi Connected Successfully!");
-  Serial.print("IP Address: ");
-  Serial.println(WiFi.localIP());
+  Serial.println("\n✅ WiFi Connected!");
+  Serial.print("IP: "); Serial.println(WiFi.localIP());
 
-  // MQTT Server Configuration
+  // Build device ID from MAC (strip colons, lowercase)
+  deviceID = WiFi.macAddress();
+  deviceID.replace(":", "");
+  deviceID.toLowerCase();
+  Serial.printf("Device ID: %s\n", deviceID.c_str());
+
+  // Build feed topic strings
+  deviceFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-" + deviceID;
+  globalFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-all";
+
   mqtt.setServer(AIO_SERVER, AIO_SERVERPORT);
   mqtt.setCallback(mqttCallback);
 }
 
+// ==========================================
+// Loop
+// ==========================================
 void loop() {
-  if (!mqtt.connected()) {
-    connectMQTT();
-  }
+  if (!mqtt.connected()) connectMQTT();
   mqtt.loop();
 }

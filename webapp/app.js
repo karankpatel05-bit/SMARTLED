@@ -1,99 +1,278 @@
-// --- DOM Elements ---
-const connectionScreen = document.getElementById('connection-screen');
-const mainScreen = document.getElementById('main-screen');
-const connectBtn = document.getElementById('connect-btn');
-const disconnectBtn = document.getElementById('disconnect-btn');
-const connectionStatus = document.getElementById('connection-status');
-const statusIcon = document.getElementById('status-icon');
-const brightnessBar = document.getElementById('brightness-bar');
-const brightnessText = document.getElementById('brightness-text');
-const micBtn = document.getElementById('mic-btn');
-const cameraToggleBtn = document.getElementById('camera-toggle-btn');
-const voiceTranscript = document.getElementById('voice-transcript');
-const videoElement = document.getElementById('input-video');
-const canvasElement = document.getElementById('output-canvas');
-const canvasCtx = canvasElement.getContext('2d');
-const powerBtn = document.getElementById('power-btn');
-const brightnessSlider = document.getElementById('brightness-slider');
-const sliderPctLabel = document.getElementById('slider-pct-label');
-const resetDeviceBtn = document.getElementById('reset-device-btn');
+// ===========================================
+// DOM Elements
+// ===========================================
+const connectionScreen     = document.getElementById('connection-screen');
+const mainScreen           = document.getElementById('main-screen');
+const connectBtn           = document.getElementById('connect-btn');
+const disconnectBtn        = document.getElementById('disconnect-btn');
+const connectionStatus     = document.getElementById('connection-status');
+const statusIcon           = document.getElementById('status-icon');
+const brightnessBar        = document.getElementById('brightness-bar');
+const brightnessText       = document.getElementById('brightness-text');
+const micBtn               = document.getElementById('mic-btn');
+const cameraToggleBtn      = document.getElementById('camera-toggle-btn');
+const voiceTranscript      = document.getElementById('voice-transcript');
+const videoElement         = document.getElementById('input-video');
+const canvasElement        = document.getElementById('output-canvas');
+const canvasCtx            = canvasElement.getContext('2d');
+const dashboard            = document.getElementById('dashboard');
+const selectedDeviceLabel  = document.getElementById('selected-device-label');
 
-// --- Adafruit IO REST API Config ---
+// ===========================================
+// Adafruit IO REST API Helpers
 // AIO_USERNAME and AIO_KEY are loaded from config.js
-const AIO_FEED_KEY = "smartled-commands";
-const AIO_REST_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${AIO_FEED_KEY}/data`;
+// ===========================================
+const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-registry/data/last`;
 
-// Publish a value to Adafruit IO via REST API (no WebSocket needed)
-// Throttled: Adafruit IO free tier = max 30 points/min (1 per 2s)
-let _publishing = false;
-let _lastPublish = 0;
-const AIO_MIN_INTERVAL_MS = 2000; // 2 seconds minimum between publishes
+function deviceFeedUrl(deviceId) {
+    return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-${deviceId}/data`;
+}
 
-async function publishToAIO(value) {
-    // Prevent concurrent requests
-    if (_publishing) return false;
-    // Enforce rate limit
-    const now = Date.now();
-    const wait = AIO_MIN_INTERVAL_MS - (now - _lastPublish);
+// Per-device rate-limiter state (Adafruit IO free: max 30 points/min)
+const _pub = {};
+
+async function publishToDevice(deviceId, value) {
+    if (!_pub[deviceId]) _pub[deviceId] = { busy: false, last: 0 };
+    const s = _pub[deviceId];
+    if (s.busy) return false;
+    const wait = 2000 - (Date.now() - s.last);
     if (wait > 0) await new Promise(r => setTimeout(r, wait));
-
-    _publishing = true;
-    _lastPublish = Date.now();
+    s.busy = true;
+    s.last = Date.now();
     try {
-        const response = await fetch(AIO_REST_URL, {
+        const res = await fetch(deviceFeedUrl(deviceId), {
             method: 'POST',
-            headers: {
-                'X-AIO-Key': AIO_KEY,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ value: value })
+            headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ value })
         });
-        if (!response.ok) {
-            const err = await response.text();
-            console.error('AIO publish failed:', err);
-            return false;
-        }
+        if (!res.ok) { console.error('Publish failed:', await res.text()); return false; }
         return true;
-    } catch (e) {
-        console.error('AIO fetch error:', e);
+    } catch(e) {
+        console.error('Publish error:', e);
         return false;
     } finally {
-        _publishing = false;
+        s.busy = false;
     }
 }
 
-// --- State ---
-let botState = { power: 1, brightness: 127 };
-let lastActionTime = 0;
-let stableFingers = -1;
-let fingerFrames = 0;
-let isListening = false;
-let facingMode = 'user';
-let camera = null;
+// ===========================================
+// Fleet Device Management
+// ===========================================
+let knownDevices   = JSON.parse(localStorage.getItem('smartled_devices')) || [];
+let selectedId     = knownDevices.length > 0 ? knownDevices[0].id : null;
+const deviceStates = {};
 
-// --- Auto-connect on load: skip connection screen ---
-window.addEventListener('load', () => {
-    if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME' ||
-        !AIO_KEY || AIO_KEY === 'YOUR_AIO_KEY') {
-        connectionStatus.textContent = '❌ Credentials missing in config.js!';
-        connectionStatus.style.color = 'var(--danger)';
+knownDevices.forEach(d => { deviceStates[d.id] = { power: 1, brightness: 127 }; });
+
+// Poll Adafruit IO registry for new device pings
+async function pollRegistry() {
+    try {
+        const res = await fetch(AIO_REGISTRY_URL, { headers: { 'X-AIO-Key': AIO_KEY } });
+        if (!res.ok) return;
+        const data = await res.json();
+        const newId = data?.value?.trim();
+        if (!newId || knownDevices.find(d => d.id === newId)) return;
+
+        const name = prompt(
+            `🔍 New SmartLED discovered!\nDevice ID: ${newId}\n\nWhat would you like to name it? (e.g., Living Room)`
+        );
+        if (!name || !name.trim()) return;
+
+        const device = { id: newId, name: name.trim() };
+        knownDevices.push(device);
+        localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
+        deviceStates[device.id] = { power: 1, brightness: 127 };
+        if (!selectedId) { selectedId = device.id; }
+        renderDeviceCard(device);
+        updateGlobalStatusBar();
+    } catch(e) {
+        console.error('Registry poll error:', e);
+    }
+}
+
+// ===========================================
+// Device Card Rendering
+// ===========================================
+function renderDeviceCard(device) {
+    const noMsg = dashboard.querySelector('.no-devices-msg');
+    if (noMsg) noMsg.remove();
+
+    const state = deviceStates[device.id];
+    const pct   = Math.round((state.brightness / 255) * 100);
+    const isOn  = state.power === 1 && state.brightness > 0;
+    const isSel = device.id === selectedId;
+
+    const card = document.createElement('div');
+    card.className = `device-card${isSel ? ' selected' : ''}`;
+    card.id = `card-${device.id}`;
+
+    card.innerHTML = `
+        <div class="device-card-header">
+            <div class="device-info">
+                <i class="ph ph-lightbulb device-icon${isOn ? '' : ' off'}"></i>
+                <div>
+                    <div class="device-name">${device.name}</div>
+                    <div class="device-id">ID: ${device.id.slice(-6).toUpperCase()}</div>
+                </div>
+            </div>
+            <div class="device-card-actions">
+                <button class="power-btn ${isOn ? 'on' : ''}" id="power-${device.id}" title="Toggle Power">
+                    <i class="ph ph-power"></i>
+                </button>
+                <button class="select-btn ${isSel ? 'active' : ''}" id="select-${device.id}" title="Select for gesture &amp; voice">
+                    <i class="ph ph-cursor-click"></i>
+                </button>
+            </div>
+        </div>
+        <div class="slider-row" style="margin-top:0.75rem;">
+            <i class="ph ph-sun-dim slider-icon"></i>
+            <input type="range" class="brightness-slider" id="slider-${device.id}" min="0" max="255" value="${state.brightness}">
+            <i class="ph ph-sun slider-icon"></i>
+        </div>
+        <div class="slider-label"><span id="pct-${device.id}">${pct}%</span></div>
+        <button class="reset-btn" id="reset-${device.id}">
+            <i class="ph ph-wifi-x"></i> Reset Wi-Fi
+        </button>
+    `;
+    dashboard.appendChild(card);
+    attachCardListeners(device);
+}
+
+function attachCardListeners(device) {
+    const id = device.id;
+
+    // Power toggle
+    document.getElementById(`power-${id}`).addEventListener('click', () => {
+        const s = deviceStates[id];
+        s.power = s.power === 1 ? 0 : 1;
+        if (s.power === 1 && s.brightness === 0) s.brightness = 255;
+        updateCardUI(id);
+        publishToDevice(id, `${s.power},${s.brightness}`);
+    });
+
+    // Select for gesture/voice targeting
+    document.getElementById(`select-${id}`).addEventListener('click', () => {
+        selectedId = id;
+        document.querySelectorAll('.device-card').forEach(c => c.classList.remove('selected'));
+        document.querySelectorAll('.select-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(`card-${id}`).classList.add('selected');
+        document.getElementById(`select-${id}`).classList.add('active');
+        updateGlobalStatusBar();
+    });
+
+    // Brightness slider (debounced 500ms)
+    let sliderTimer = null;
+    document.getElementById(`slider-${id}`).addEventListener('input', () => {
+        const val = parseInt(document.getElementById(`slider-${id}`).value);
+        deviceStates[id].brightness = val;
+        deviceStates[id].power      = val > 0 ? 1 : 0;
+        document.getElementById(`pct-${id}`).textContent = `${Math.round((val / 255) * 100)}%`;
+        updateCardUI(id);
+        clearTimeout(sliderTimer);
+        sliderTimer = setTimeout(() => {
+            const s = deviceStates[id];
+            publishToDevice(id, `${s.power},${s.brightness}`);
+        }, 500);
+    });
+
+    // Reset Wi-Fi
+    document.getElementById(`reset-${id}`).addEventListener('click', () => {
+        if (confirm(`Reset Wi-Fi on "${device.name}"?\nIt will restart in setup mode.`)) {
+            publishToDevice(id, 'RESET').then(ok => alert(ok ? 'Reset sent!' : 'Failed to send reset.'));
+        }
+    });
+}
+
+function updateCardUI(deviceId) {
+    const s   = deviceStates[deviceId];
+    const isOn = s.power === 1 && s.brightness > 0;
+    const pct  = Math.round((s.brightness / 255) * 100);
+
+    const powerBtn = document.getElementById(`power-${deviceId}`);
+    const icon     = document.querySelector(`#card-${deviceId} .device-icon`);
+    if (powerBtn) powerBtn.className = `power-btn ${isOn ? 'on' : ''}`;
+    if (icon)     icon.className     = `ph ph-lightbulb device-icon${isOn ? '' : ' off'}`;
+    const pctEl = document.getElementById(`pct-${deviceId}`);
+    if (pctEl)    pctEl.textContent  = `${pct}%`;
+
+    if (deviceId === selectedId) updateGlobalStatusBar();
+}
+
+function updateGlobalStatusBar() {
+    const name  = knownDevices.find(d => d.id === selectedId)?.name;
+    selectedDeviceLabel.textContent = name ? `🎯 ${name}` : 'No device selected';
+
+    if (!selectedId || !deviceStates[selectedId]) {
+        brightnessText.textContent = '–';
+        brightnessBar.style.width = '0%';
         return;
     }
-    // Skip connection screen — REST API needs no persistent connection
+    const s = deviceStates[selectedId];
+    const p = (s.power === 1 && s.brightness > 0) ? (s.brightness / 255) * 100 : 0;
+    brightnessBar.style.width  = `${p}%`;
+    brightnessText.textContent = `${Math.round(p)}%`;
+    statusIcon.className = `ph ph-lightbulb${p === 0 ? ' off' : ''}`;
+    statusIcon.style.filter = p > 0
+        ? `drop-shadow(0 0 ${10 + p / 10}px rgba(234,179,8,${0.5 + p / 200}))`
+        : 'none';
+}
+
+function renderDashboard() {
+    dashboard.innerHTML = '';
+    if (knownDevices.length === 0) {
+        dashboard.innerHTML = `
+            <div class="no-devices-msg">
+                <i class="ph ph-wifi-none" style="font-size:2rem;color:var(--text-muted);"></i>
+                <p style="margin-top:0.5rem;color:var(--text-muted);text-align:center;font-size:0.9rem;">
+                    No devices found yet.<br>Power on your SmartLED to auto-discover it.
+                </p>
+            </div>`;
+        return;
+    }
+    knownDevices.forEach(d => renderDeviceCard(d));
+}
+
+// Gesture / Voice → selected device
+function sendToSelected(power, brightness) {
+    if (!selectedId) return;
+    deviceStates[selectedId] = { power, brightness };
+    updateCardUI(selectedId);
+    publishToDevice(selectedId, `${power},${brightness}`);
+}
+
+// ===========================================
+// App Init
+// ===========================================
+function initApp() {
+    if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME' ||
+        !AIO_KEY       || AIO_KEY       === 'YOUR_AIO_KEY') {
+        connectionStatus.textContent = '❌ Credentials missing in config.js!';
+        connectionStatus.style.color = 'var(--danger)';
+        return false;
+    }
+    return true;
+}
+
+window.addEventListener('load', () => {
+    if (!initApp()) return;
     connectionScreen.classList.remove('active');
     mainScreen.classList.add('active');
+    renderDashboard();
+    updateGlobalStatusBar();
     startCamera();
+    pollRegistry();
+    setInterval(pollRegistry, 30000);
 });
 
 connectBtn.addEventListener('click', () => {
-    if (!AIO_USERNAME || AIO_USERNAME === 'YOUR_AIO_USERNAME') {
-        connectionStatus.textContent = '❌ Credentials missing!';
-        connectionStatus.style.color = 'var(--danger)';
-        return;
-    }
+    if (!initApp()) return;
     connectionScreen.classList.remove('active');
     mainScreen.classList.add('active');
+    renderDashboard();
+    updateGlobalStatusBar();
     startCamera();
+    pollRegistry();
+    setInterval(pollRegistry, 30000);
 });
 
 disconnectBtn.addEventListener('click', () => {
@@ -102,248 +281,116 @@ disconnectBtn.addEventListener('click', () => {
     stopCamera();
 });
 
-function sendState() {
-    const payload = `${botState.power},${botState.brightness}`;
-    publishToAIO(payload);
-    updateUI();
-}
-
-resetDeviceBtn.addEventListener('click', () => {
-    if (confirm("Wipe the ESP8266's Wi-Fi credentials? It will restart in setup mode.")) {
-        publishToAIO('RESET').then(ok => {
-            if (ok) alert('Reset command sent!');
-            else alert('Failed to send reset command.');
-        });
-    }
-});
-
-function updateUI() {
-    const p = (botState.power === 1 && botState.brightness > 0) ? (botState.brightness / 255) * 100 : 0;
-    brightnessBar.style.width = `${p}%`;
-    brightnessText.textContent = `${Math.round(p)}%`;
-
-    // Sync manual controls
-    brightnessSlider.value = botState.brightness;
-    sliderPctLabel.textContent = `${Math.round((botState.brightness / 255) * 100)}%`;
-    if (botState.power === 1) {
-        powerBtn.classList.add('on');
-    } else {
-        powerBtn.classList.remove('on');
-    }
-
-    if (botState.power === 0 || botState.brightness === 0) {
-        statusIcon.classList.add('off');
-        statusIcon.style.filter = 'none';
-    } else {
-        statusIcon.classList.remove('off');
-        statusIcon.style.filter = `drop-shadow(0 0 ${10 + p / 10}px rgba(234, 179, 8, ${0.5 + p / 200}))`;
-    }
-}
-
-// --- Manual Controls Logic ---
-powerBtn.addEventListener('click', () => {
-    botState.power = botState.power === 1 ? 0 : 1;
-    // When turning on from off, restore to a default brightness if it was 0
-    if (botState.power === 1 && botState.brightness === 0) {
-        botState.brightness = 255;
-        brightnessSlider.value = 255;
-    }
-    sendState();
-});
-
-// Debounce timer for slider - only sends final value after user stops moving
-let _sliderTimer = null;
-
-brightnessSlider.addEventListener('input', () => {
-    const val = parseInt(brightnessSlider.value);
-    botState.brightness = val;
-    if (val > 0) botState.power = 1;
-    else botState.power = 0;
-    sliderPctLabel.textContent = `${Math.round((val / 255) * 100)}%`;
-    // Update UI immediately (feels responsive)
-    updateUI();
-    // But only publish 500ms after the user STOPS dragging
-    clearTimeout(_sliderTimer);
-    _sliderTimer = setTimeout(() => sendState(), 500);
-});
-
-// --- MediaPipe Hands Logic ---
+// ===========================================
+// MediaPipe Hand Gesture Detection
+// ===========================================
 const hands = new Hands({
-    locateFile: (file) => {
-        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-    }
+    locateFile: file => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
 });
-hands.setOptions({
-    maxNumHands: 1,
-    modelComplexity: 0, // 0 for faster mobile performance
-    minDetectionConfidence: 0.7,
-    minTrackingConfidence: 0.5
-});
-
+hands.setOptions({ maxNumHands: 1, modelComplexity: 0, minDetectionConfidence: 0.7, minTrackingConfidence: 0.5 });
 hands.onResults(onResults);
 
 function countFingers(landmarks, handedness) {
-    let count = 0;
-    // Thumb
+    let c = 0;
     const isLeft = handedness === 'Left';
-    if (isLeft && landmarks[4].x > landmarks[3].x) count++;
-    else if (!isLeft && landmarks[4].x < landmarks[3].x) count++;
-
-    // Index, Middle, Ring, Pinky
-    if (landmarks[8].y < landmarks[6].y) count++;
-    if (landmarks[12].y < landmarks[10].y) count++;
-    if (landmarks[16].y < landmarks[14].y) count++;
-    if (landmarks[20].y < landmarks[18].y) count++;
-
-    return count;
+    if (isLeft  && landmarks[4].x > landmarks[3].x) c++;
+    if (!isLeft && landmarks[4].x < landmarks[3].x) c++;
+    if (landmarks[8].y  < landmarks[6].y)  c++;
+    if (landmarks[12].y < landmarks[10].y) c++;
+    if (landmarks[16].y < landmarks[14].y) c++;
+    if (landmarks[20].y < landmarks[18].y) c++;
+    return c;
 }
 
-function onResults(results) {
-    // Resize canvas to match video
-    canvasElement.width = videoElement.videoWidth;
-    canvasElement.height = videoElement.videoHeight;
+let lastActionTime = 0, stableFingers = -1, fingerFrames = 0;
 
+function onResults(results) {
+    canvasElement.width  = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
     canvasCtx.save();
     canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-    // Draw Video feed
     canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-        const landmarks = results.multiHandLandmarks[0];
-        const handedness = results.multiHandedness[0].label;
+    if (results.multiHandLandmarks?.length > 0) {
+        const lm = results.multiHandLandmarks[0];
+        const hd = results.multiHandedness[0].label;
+        drawConnectors(canvasCtx, lm, HAND_CONNECTIONS, { color: '#3b82f6', lineWidth: 3 });
+        drawLandmarks(canvasCtx, lm, { color: '#eab308', lineWidth: 1, radius: 3 });
 
-        // Draw Hand
-        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, { color: '#3b82f6', lineWidth: 3 });
-        drawLandmarks(canvasCtx, landmarks, { color: '#eab308', lineWidth: 1, radius: 3 });
+        const fingers = countFingers(lm, hd);
+        if (fingers === stableFingers) fingerFrames++;
+        else { stableFingers = fingers; fingerFrames = 0; }
 
-        const fingers = countFingers(landmarks, handedness);
-
-        // Debounce Logic
-        if (fingers === stableFingers) {
-            fingerFrames++;
-        } else {
-            stableFingers = fingers;
-            fingerFrames = 0;
-        }
-
-        // Apply gesture if stable for 15 frames (~0.5s) and debounce time passed (1s)
         const now = Date.now();
         if (fingerFrames > 10 && (now - lastActionTime) > 1000) {
             lastActionTime = now;
-
-            if (fingers === 0) {
-                botState.power = 0;
-            } else {
-                botState.power = 1;
-                botState.brightness = Math.round((fingers / 5.0) * 255);
-            }
-            sendState();
+            if (fingers === 0) sendToSelected(0, deviceStates[selectedId]?.brightness || 127);
+            else               sendToSelected(1, Math.round((fingers / 5.0) * 255));
         }
     }
     canvasCtx.restore();
 }
 
+// ===========================================
+// Camera
+// ===========================================
+let facingMode = 'user', camera = null;
+
 function startCamera() {
-    if (camera) {
-        camera.stop();
-    }
+    if (camera) camera.stop();
     camera = new Camera(videoElement, {
-        onFrame: async () => {
-            await hands.send({ image: videoElement });
-        },
-        width: 640,
-        height: 480,
-        facingMode: facingMode
+        onFrame: async () => { await hands.send({ image: videoElement }); },
+        width: 640, height: 480, facingMode
     });
-    camera.start().catch(e => {
-        console.error("Camera start failed:", e);
-        alert("Camera permission denied or camera not found.");
-    });
+    camera.start().catch(e => { console.error('Camera error:', e); });
 }
 
-function stopCamera() {
-    if (camera) camera.stop();
-}
+function stopCamera() { if (camera) camera.stop(); }
 
 cameraToggleBtn.addEventListener('click', () => {
     facingMode = facingMode === 'user' ? 'environment' : 'user';
-    // Mirroring logic: we only mirror if it's the front camera
-    if (facingMode === 'user') {
-        canvasElement.style.transform = 'scaleX(-1)';
-    } else {
-        canvasElement.style.transform = 'scaleX(1)';
-    }
+    canvasElement.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
     startCamera();
 });
 
-// --- Web Speech API (Voice Control) ---
+// ===========================================
+// Voice Control (targets selected device)
+// ===========================================
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let isListening = false;
+
 if (SpeechRecognition) {
     const recognition = new SpeechRecognition();
     recognition.continuous = false;
     recognition.lang = 'en-US';
 
-    recognition.onstart = () => {
-        isListening = true;
-        micBtn.classList.add('listening');
-        voiceTranscript.textContent = "Listening...";
+    recognition.onstart = () => { isListening = true;  micBtn.classList.add('listening');    voiceTranscript.textContent = 'Listening...'; };
+    recognition.onend   = () => { isListening = false; micBtn.classList.remove('listening'); setTimeout(() => { if (!isListening) voiceTranscript.textContent = 'Say "Turn on" or "Set to 50%" — targets selected device'; }, 3000); };
+    recognition.onerror = ()  => { voiceTranscript.textContent = 'Error listening.'; };
+
+    recognition.onresult = event => {
+        const text = event.results[0][0].transcript.toLowerCase().trim();
+        voiceTranscript.textContent = `"${text}"`;
+        parseVoiceCommand(text);
     };
 
-    recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript.toLowerCase().trim();
-        voiceTranscript.textContent = `"${transcript}"`;
-        parseVoiceCommand(transcript);
-    };
-
-    recognition.onerror = (event) => {
-        console.error("Speech Error:", event.error);
-        voiceTranscript.textContent = "Error listening to voice.";
-    };
-
-    recognition.onend = () => {
-        isListening = false;
-        micBtn.classList.remove('listening');
-        setTimeout(() => {
-            if (!isListening) voiceTranscript.textContent = "Say something like \"Turn on\" or \"Set to 50%\"";
-        }, 3000);
-    };
-
-    micBtn.addEventListener('click', () => {
-        if (isListening) {
-            recognition.stop();
-        } else {
-            recognition.start();
-        }
-    });
+    micBtn.addEventListener('click', () => { isListening ? recognition.stop() : recognition.start(); });
 } else {
     micBtn.style.display = 'none';
-    voiceTranscript.textContent = "Voice control not supported in this browser.";
 }
 
 function parseVoiceCommand(text) {
-    if (text.includes('turn on') || text.includes('lights on')) {
-        botState.power = 1;
-        if (botState.brightness === 0) botState.brightness = 255;
-    }
-    else if (text.includes('turn off') || text.includes('lights off')) {
-        botState.power = 0;
-    }
+    if (!selectedId) return;
+    const s = { ...deviceStates[selectedId] };
+    if      (text.includes('turn on')  || text.includes('lights on'))  { s.power = 1; if (s.brightness === 0) s.brightness = 255; }
+    else if (text.includes('turn off') || text.includes('lights off')) { s.power = 0; }
     else if (text.includes('%') || text.includes('percent')) {
-        // Extract number
-        const match = text.match(/(\d+)/);
-        if (match) {
-            let pct = parseInt(match[1]);
-            pct = Math.max(0, Math.min(100, pct)); // clamp 0-100
-
-            if (pct === 0) {
-                botState.power = 0;
-            } else {
-                botState.power = 1;
-                botState.brightness = Math.round((pct / 100) * 255);
-            }
+        const m = text.match(/(\d+)/);
+        if (m) {
+            const pct = Math.max(0, Math.min(100, parseInt(m[1])));
+            s.power = pct > 0 ? 1 : 0;
+            s.brightness = Math.round((pct / 100) * 255);
         }
     }
-
-    sendState();
+    sendToSelected(s.power, s.brightness);
 }

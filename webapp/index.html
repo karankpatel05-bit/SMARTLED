@@ -15,7 +15,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
     
-    <!-- Configuration -->
+    <!-- Configuration (credentials injected by build) -->
     <script src="config.js"></script>
 
     <!-- Phosphor Icons -->
@@ -29,8 +29,8 @@
             <i class="ph ph-lightbulb bulb-icon"></i>
             <h1>Smart LED</h1>
         </div>
-        <p>Connect to Adafruit IO</p>
-        <button id="connect-btn" class="primary-btn">Connect MQTT</button>
+        <p>Fleet Dashboard — Powered by Adafruit IO</p>
+        <button id="connect-btn" class="primary-btn">Open Dashboard</button>
         <div id="connection-status"></div>
     </div>
 
@@ -40,11 +40,12 @@
         <header>
             <div class="status-indicator">
                 <div class="dot connected"></div>
-                <span>Connected</span>
+                <span id="selected-device-label">No device selected</span>
             </div>
             <button id="disconnect-btn" class="icon-btn"><i class="ph ph-x"></i></button>
         </header>
 
+        <!-- Camera Feed -->
         <div class="camera-container">
             <video id="input-video" playsinline></video>
             <canvas id="output-canvas"></canvas>
@@ -56,47 +57,28 @@
             <div class="progress-bar-container">
                 <div id="brightness-bar" class="progress-bar"></div>
             </div>
-            <span id="brightness-text">0%</span>
+            <span id="brightness-text">–</span>
         </div>
 
-        <!-- Manual Controls -->
-        <div class="manual-controls">
-            <div class="manual-controls-header">
-                <span>Manual Control</span>
-                <button id="power-btn" class="power-btn on">
-                    <i class="ph ph-power"></i>
-                </button>
-            </div>
-            <div class="slider-row">
-                <i class="ph ph-sun-dim slider-icon"></i>
-                <input type="range" id="brightness-slider" min="0" max="255" value="127" class="brightness-slider">
-                <i class="ph ph-sun slider-icon"></i>
-            </div>
-            <div class="slider-label"><span id="slider-pct-label">50%</span></div>
-        </div>
+        <!-- Device Fleet Dashboard -->
+        <div id="dashboard"></div>
 
-        <div class="controls-panel">
+        <!-- Global Controls (Camera + Voice) -->
+        <div class="controls-panel" style="margin-top: 1rem;">
             <button id="mic-btn" class="action-btn">
                 <i class="ph ph-microphone"></i>
-                <span>Voice Command</span>
+                <span>Voice</span>
             </button>
             <button id="camera-toggle-btn" class="action-btn">
                 <i class="ph ph-camera-rotate"></i>
                 <span>Flip Camera</span>
             </button>
         </div>
-        <div class="controls-panel" style="margin-top: 15px;">
-            <button id="reset-device-btn" class="action-btn" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.1);">
-                <i class="ph ph-warning-circle"></i>
-                <span>Reset Wi-Fi</span>
-            </button>
-        </div>
-        <div id="voice-transcript" class="transcript">Say something like "Turn on" or "Set to 50%"</div>
+        <div id="voice-transcript" class="transcript">Say "Turn on" or "Set to 50%" — targets selected device</div>
     </div>
 
     <script src="app.js"></script>
     <script>
-        // Register Service Worker for PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js');
