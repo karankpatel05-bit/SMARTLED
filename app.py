@@ -5,6 +5,8 @@ import time
 import cv2
 import mediapipe as mp
 import paho.mqtt.client as mqtt
+import requests
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -20,12 +22,55 @@ AIO_KEY = os.getenv("AIO_KEY", "YOUR_AIO_KEY")
 AIO_SERVER = "io.adafruit.com"
 AIO_PORT = 1883
 AIO_FEED_TOPIC = f"{AIO_USERNAME}/Feeds/smartled-commands"
+AIO_REST_URL = f"https://io.adafruit.com/api/v2/{AIO_USERNAME}/feeds"
 
 mqtt_client = mqtt.Client()
 mqtt_client.username_pw_set(AIO_USERNAME, AIO_KEY)
+
+def on_message(client, userdata, msg):
+    topic = msg.topic
+    payload = msg.payload.decode('utf-8')
+    
+    # Check if this is a "Fleet Ping" from a new device booting up
+    if topic == f"{AIO_USERNAME}/feeds/smartled-registry":
+        new_device_id = payload
+        feed_key = f"smartled-{new_device_id}"
+        
+        headers = {
+            "X-AIO-Key": AIO_KEY,
+            "Content-Type": "application/json"
+        }
+        
+        # 1. Try to get the feed to see if it exists
+        check_req = requests.get(f"{AIO_REST_URL}/{feed_key}", headers=headers)
+        
+        if check_req.status_code == 404:
+            print(f"🚀 New device detected ({new_device_id})! Creating Adafruit IO feed...")
+            
+            # 2. It doesn't exist, so we tell Adafruit to create it
+            feed_data = {
+                "feed": {
+                    "name": feed_key,
+                    "key": feed_key,
+                    "description": "Auto-generated feed for SMARTLED device"
+                }
+            }
+            
+            create_req = requests.post(AIO_REST_URL, headers=headers, data=json.dumps(feed_data))
+            
+            if create_req.status_code == 201:
+                print(f"✅ Successfully created feed: {feed_key}")
+            else:
+                print(f"❌ Failed to create feed. Adafruit responded: {create_req.text}")
+        else:
+            print(f"✅ Device {new_device_id} is online (Feed already exists).")
+
+mqtt_client.on_message = on_message
+
 try:
     mqtt_client.connect(AIO_SERVER, AIO_PORT)
     mqtt_client.loop_start()
+    mqtt_client.subscribe(f"{AIO_USERNAME}/feeds/smartled-registry")
     print("✅ Connected to Adafruit IO MQTT Broker")
 except Exception as e:
     print(f"⚠️ Failed to connect to Adafruit IO: {e}")

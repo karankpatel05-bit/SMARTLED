@@ -4,3 +4,4 @@ opencv-python==4.9.0.80
 mediapipe==0.10.14
 paho-mqtt==1.6.1
 python-dotenv==1.0.1
+requests==2.31.0
