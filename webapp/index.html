@@ -87,15 +87,67 @@
             <button id="close-settings-btn" class="icon-btn"><i class="ph ph-x"></i></button>
         </header>
 
-        <h3 style="margin-top: 1rem; color: var(--primary); font-size: 0.9rem; text-transform: uppercase;">Discovered Devices</h3>
-        <p style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-muted); text-align: left;">Devices powered on in the last 5 minutes</p>
-        <div id="discovered-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
-            <!-- Rendered by JS -->
+        <div class="settings-tabs">
+            <button class="tab-btn active" data-tab="tab-devices">Devices</button>
+            <button class="tab-btn" data-tab="tab-guide">How to Use</button>
         </div>
 
-        <h3 style="color: var(--primary); font-size: 0.9rem; text-transform: uppercase; margin-bottom: 1rem;">Saved Devices</h3>
-        <div id="saved-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
-            <!-- Rendered by JS -->
+        <div id="tab-devices" class="tab-content active">
+            <h3 style="margin-top: 1rem; color: var(--primary); font-size: 0.9rem; text-transform: uppercase;">Discovered Devices</h3>
+            <p style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-muted); text-align: left;">Devices powered on in the last 5 minutes</p>
+            <div id="discovered-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
+                <!-- Rendered by JS -->
+            </div>
+
+            <h3 style="color: var(--primary); font-size: 0.9rem; text-transform: uppercase; margin-bottom: 1rem;">Saved Devices</h3>
+            <div id="saved-list" style="display: flex; flex-direction: column; gap: 0.5rem;">
+                <!-- Rendered by JS -->
+            </div>
+        </div>
+
+        <div id="tab-guide" class="tab-content">
+            <div class="guide-step">
+                <div class="step-icon-wrap" style="color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);">
+                    <i class="ph ph-plug"></i>
+                </div>
+                <div class="step-text">
+                    <h4>1. Power Up</h4>
+                    <p>Plug in your SmartLED. For the first 5 minutes after powering on, it will broadcast its signal to the app.</p>
+                </div>
+            </div>
+            
+            <div class="guide-step">
+                <div class="step-icon-wrap" style="color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);">
+                    <i class="ph ph-plus-circle"></i>
+                </div>
+                <div class="step-text">
+                    <h4>2. Add Your Device</h4>
+                    <p>Check the 'Devices' tab here in Settings. Your new device will appear under Discovered Devices. Tap 'Add' to name it!</p>
+                </div>
+            </div>
+
+            <div class="guide-step">
+                <div class="step-icon-wrap" style="color: #eab308; box-shadow: 0 0 15px rgba(234, 179, 8, 0.4);">
+                    <i class="ph ph-sliders-horizontal"></i>
+                </div>
+                <div class="step-text">
+                    <h4>3. Manual Control</h4>
+                    <p>Go back to the main dashboard. Use the slider to smoothly adjust brightness, or tap the power icon to toggle the light.</p>
+                </div>
+            </div>
+
+            <div class="guide-step">
+                <div class="step-icon-wrap" style="color: #ec4899; box-shadow: 0 0 15px rgba(236, 72, 153, 0.4);">
+                    <div style="display:flex;gap:4px;">
+                        <i class="ph ph-hand-waving"></i>
+                        <i class="ph ph-microphone"></i>
+                    </div>
+                </div>
+                <div class="step-text">
+                    <h4>4. AI Gestures & Voice</h4>
+                    <p>Tap the blue target icon on any device card. Now, speak voice commands, or show 5 fingers to the camera for max brightness, and a closed fist to turn it off!</p>
+                </div>
+            </div>
         </div>
     </div>
 

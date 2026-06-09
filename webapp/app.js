@@ -553,6 +553,18 @@ document.getElementById('close-settings-btn').addEventListener('click', () => {
     document.getElementById('main-screen').style.display = 'flex';
 });
 
+// Settings Tabs Logic
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        const target = e.target;
+        target.classList.add('active');
+        document.getElementById(target.getAttribute('data-tab')).classList.add('active');
+    });
+});
+
 // ===========================================
 // MediaPipe Hand Gesture Detection
 // ===========================================
