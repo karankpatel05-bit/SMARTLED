@@ -116,7 +116,7 @@ void setup() {
   WiFiManager wm;
   Serial.println("WiFiManager starting...");
   
-  String apName = "SMARTLED-" + deviceID;
+  String apName = "SMARTLED_Setup_" + deviceID;
   apName.toUpperCase();
   
   if (!wm.autoConnect(apName.c_str(), "password123")) {
