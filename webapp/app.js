@@ -91,9 +91,6 @@ async function syncDeviceStates() {
         } catch (e) {
             // Ignore background sync errors
         }
-        
-        // Add a small delay between fetches to respect Adafruit IO burst limits and prevent network thread blocking
-        await new Promise(resolve => setTimeout(resolve, 300));
     }
 }
 
@@ -356,20 +353,6 @@ function renderDashboard() {
 // Gesture / Voice → selected device
 function sendToSelected(power, brightness) {
     if (!selectedId) return;
-
-    // Fast return: do NOT queue a redundant network request if already in state.
-    // This dramatically reduces network latency during camera gestures.
-    let targetState = null;
-    if (selectedId === 'all') {
-        targetState = deviceStates[knownDevices[0]?.id];
-    } else {
-        targetState = deviceStates[selectedId];
-    }
-    
-    if (targetState && targetState.power === power && targetState.brightness === brightness) {
-        return; 
-    }
-
     if (selectedId === 'all') {
         knownDevices.forEach(d => {
             deviceStates[d.id] = { power, brightness };
@@ -401,39 +384,29 @@ function initApp() {
     return true;
 }
 
-let isAppInitialized = false;
-
-function launchApp() {
+window.addEventListener('load', () => {
     if (!initApp()) return;
-
     connectionScreen.classList.remove('active');
     mainScreen.classList.add('active');
-    
-    // Prevent double-initialization which causes NotReadableError for the camera
-    if (isAppInitialized) {
-        startCamera();
-        return; 
-    }
-    isAppInitialized = true;
-    
     renderDashboard();
     updateGlobalStatusBar();
     startCamera();
-    
     pollRegistry();
     setInterval(pollRegistry, 30000);
-    
-    // Use recursive timeout instead of setInterval to prevent concurrent fetch overlaps
-    // when multiple devices are configured
-    async function backgroundSyncLoop() {
-        await syncDeviceStates();
-        setTimeout(backgroundSyncLoop, 8000); 
-    }
-    setTimeout(backgroundSyncLoop, 8000);
-}
+    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
+});
 
-window.addEventListener('load', launchApp);
-connectBtn.addEventListener('click', launchApp);
+connectBtn.addEventListener('click', () => {
+    if (!initApp()) return;
+    connectionScreen.classList.remove('active');
+    mainScreen.classList.add('active');
+    renderDashboard();
+    updateGlobalStatusBar();
+    startCamera();
+    pollRegistry();
+    setInterval(pollRegistry, 30000);
+    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
+});
 
 disconnectBtn.addEventListener('click', () => {
     mainScreen.classList.remove('active');

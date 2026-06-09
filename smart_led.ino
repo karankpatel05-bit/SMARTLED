@@ -5,8 +5,8 @@
 // ==========================================
 // Adafruit IO Configuration
 // ==========================================
-#define AIO_USERNAME "YOUR_AIO_USERNAME"
-#define AIO_KEY      "YOUR_AIO_KEY"
+#define AIO_USERNAME "robomanthan"
+#define AIO_KEY      "YOUR_AIO_KEY_HERE"
 #define AIO_SERVER   "io.adafruit.com"
 #define AIO_SERVERPORT 1883
 
@@ -107,9 +107,19 @@ void setup() {
   analogWrite(pwmPin, 0);
   analogWriteRange(255);
 
+  // Build device ID from MAC (strip colons, lowercase) first so we can use it in AP name
+  deviceID = WiFi.macAddress();
+  deviceID.replace(":", "");
+  deviceID.toLowerCase();
+  Serial.printf("Device ID: %s\n", deviceID.c_str());
+
   WiFiManager wm;
   Serial.println("WiFiManager starting...");
-  if (!wm.autoConnect("SmartLED_Setup", "password123")) {
+  
+  String apName = "SMARTLED-" + deviceID;
+  apName.toUpperCase();
+  
+  if (!wm.autoConnect(apName.c_str(), "password123")) {
     Serial.println("WiFi failed — restarting");
     delay(3000);
     ESP.restart();
@@ -117,12 +127,6 @@ void setup() {
 
   Serial.println("\n✅ WiFi Connected!");
   Serial.print("IP: "); Serial.println(WiFi.localIP());
-
-  // Build device ID from MAC (strip colons, lowercase)
-  deviceID = WiFi.macAddress();
-  deviceID.replace(":", "");
-  deviceID.toLowerCase();
-  Serial.printf("Device ID: %s\n", deviceID.c_str());
 
   // Build feed topic strings
   deviceFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-" + deviceID;
