@@ -541,3 +541,55 @@ canvas {
     padding: 1.5rem 0;
 }
 
+/* ==========================================
+   Device Manager Styles
+   ========================================== */
+.manager-list-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+}
+
+.manager-list-item .mac-text {
+    font-size: 0.85rem;
+    font-family: monospace;
+    color: var(--text-muted);
+}
+
+.manager-list-item .name-text {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.manager-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.manager-btn.add {
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.manager-btn.delete {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.manager-btn:hover {
+    filter: brightness(1.2);
+}
+

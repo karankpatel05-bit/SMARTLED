@@ -100,6 +100,7 @@ async function syncDeviceStates() {
 let knownDevices   = JSON.parse(localStorage.getItem('smartled_devices')) || [];
 let selectedId     = knownDevices.length > 0 ? knownDevices[0].id : null;
 const deviceStates = {};
+let discoveredQueue = []; // Track new devices waiting to be added
 
 knownDevices.forEach(d => { deviceStates[d.id] = { power: 1, brightness: 127 }; });
 
@@ -117,46 +118,30 @@ async function pollRegistry() {
         // Extract unique IDs from the recent history of pings
         const uniqueIds = [...new Set(recentPings.map(d => d?.value?.trim()).filter(v => v))];
 
+        let discoveredSomethingNew = false;
         for (const newId of uniqueIds) {
-            // If device is already known, skip
+            // If device is already known or already in queue, skip
             if (knownDevices.find(d => d.id === newId)) continue;
+            if (discoveredQueue.includes(newId)) continue;
 
-            const macDisplay = newId.toUpperCase().match(/.{1,2}/g)?.join(':') || newId;
+            discoveredQueue.push(newId);
+            discoveredSomethingNew = true;
+        }
 
-            const name = prompt(
-                `🔍 New SmartLED discovered!\nMAC Address: ${macDisplay}\n\nWhat would you like to name it? (e.g., Living Room)`
-            );
-            
-            // If they cancel or leave it blank, skip to the next one
-            if (!name || !name.trim()) continue;
-
-            // --- AUTO-PROVISIONING (Phone acting as Manager) ---
-            const feedKey = `smartled-${newId}`;
-            try {
-                const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
-                    headers: { 'X-AIO-Key': AIO_KEY }
-                });
-                if (checkRes.status === 404) {
-                    console.log(`🚀 Creating feed for ${newId} from PWA...`);
-                    await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds`, {
-                        method: 'POST',
-                        headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
-                        })
-                    });
-                }
-            } catch (e) {
-                console.error('Failed to auto-create feed:', e);
+        if (discoveredSomethingNew) {
+            if (document.getElementById('settings-screen').style.display === 'flex') {
+                renderSettingsLists();
+            } else {
+                // Show a non-intrusive toast on the main screen
+                const sb = document.getElementById('selected-device-label');
+                const originalText = sb.textContent;
+                sb.textContent = `🔔 New device found! Open Settings`;
+                sb.style.color = '#10b981'; // var(--success)
+                setTimeout(() => {
+                    sb.style.color = '';
+                    updateGlobalStatusBar();
+                }, 5000);
             }
-
-            const device = { id: newId, name: name.trim() };
-            knownDevices.push(device);
-            localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
-            deviceStates[device.id] = { power: 1, brightness: 127 };
-            if (!selectedId || selectedId === 'all') { selectedId = device.id; }
-            renderDeviceCard(device);
-            updateGlobalStatusBar();
         }
     } catch(e) {
         console.error('Registry poll error:', e);
@@ -210,9 +195,6 @@ function renderDeviceCard(device) {
             <i class="ph ph-sun slider-icon"></i>
         </div>
         <div class="slider-label"><span id="pct-${device.id}">${pct}%</span></div>
-        <button class="reset-btn" id="reset-${device.id}">
-            <i class="ph ph-wifi-x"></i> Reset Wi-Fi
-        </button>
     `;
     dashboard.appendChild(card);
     attachCardListeners(device);
@@ -316,13 +298,6 @@ function attachCardListeners(device) {
             const s = deviceStates[id];
             publishToDevice(id, `${s.power},${s.brightness}`);
         }, 500);
-    });
-
-    // Reset Wi-Fi
-    document.getElementById(`reset-${id}`).addEventListener('click', () => {
-        if (confirm(`Reset Wi-Fi on "${device.name}"?\nIt will restart in setup mode.`)) {
-            publishToDevice(id, 'RESET').then(ok => alert(ok ? 'Reset sent!' : 'Failed to send reset.'));
-        }
     });
 }
 
@@ -437,6 +412,145 @@ disconnectBtn.addEventListener('click', () => {
     mainScreen.classList.remove('active');
     connectionScreen.classList.add('active');
     stopCamera();
+});
+
+// ===========================================
+// Settings & Device Manager UI
+// ===========================================
+let pendingAddId = null;
+
+function renderSettingsLists() {
+    const dList = document.getElementById('discovered-list');
+    const sList = document.getElementById('saved-list');
+    
+    // Render Discovered (Queue)
+    dList.innerHTML = '';
+    if (discoveredQueue.length === 0) {
+        dList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No new devices detected.</div>`;
+    } else {
+        discoveredQueue.forEach(id => {
+            const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
+            dList.innerHTML += `
+                <div class="manager-list-item">
+                    <div>
+                        <div class="name-text">Unknown SmartLED</div>
+                        <div class="mac-text">${macDisplay}</div>
+                    </div>
+                    <button class="manager-btn add" onclick="openNamingModal('${id}')">Add</button>
+                </div>
+            `;
+        });
+    }
+
+    // Render Saved
+    sList.innerHTML = '';
+    if (knownDevices.length === 0) {
+        sList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No devices saved.</div>`;
+    } else {
+        knownDevices.forEach(d => {
+            const macDisplay = d.id.toUpperCase().match(/.{1,2}/g)?.join(':') || d.id;
+            sList.innerHTML += `
+                <div class="manager-list-item">
+                    <div>
+                        <div class="name-text">${d.name}</div>
+                        <div class="mac-text">${macDisplay}</div>
+                    </div>
+                    <div style="display:flex;gap:0.5rem;">
+                        <button class="manager-btn delete" onclick="deleteDevice('${d.id}')">Delete</button>
+                        <button class="manager-btn" onclick="resetDeviceWifi('${d.id}')">Reset Wi-Fi</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+}
+
+// Global functions for inline HTML onclick handlers
+window.openNamingModal = (id) => {
+    pendingAddId = id;
+    const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
+    document.getElementById('modal-mac-display').textContent = `MAC Address: ${macDisplay}`;
+    document.getElementById('device-name-input').value = '';
+    document.getElementById('name-modal').style.display = 'block';
+    document.getElementById('modal-overlay').style.display = 'block';
+};
+
+window.deleteDevice = (id) => {
+    if (confirm('Are you sure you want to completely remove this device from the app?')) {
+        knownDevices = knownDevices.filter(d => d.id !== id);
+        localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
+        if (selectedId === id) selectedId = knownDevices.length > 0 ? knownDevices[0].id : null;
+        renderSettingsLists();
+        renderDashboard();
+        updateGlobalStatusBar();
+    }
+};
+
+window.resetDeviceWifi = (id) => {
+    if (confirm('Are you sure you want to reset Wi-Fi? The SmartLED will restart in setup mode.')) {
+        publishToDevice(id, 'RESET').then(ok => alert(ok ? 'Reset command sent!' : 'Failed to send reset command.'));
+    }
+};
+
+// Modal Logic
+document.getElementById('modal-cancel-btn').addEventListener('click', () => {
+    pendingAddId = null;
+    document.getElementById('name-modal').style.display = 'none';
+    document.getElementById('modal-overlay').style.display = 'none';
+});
+
+document.getElementById('modal-save-btn').addEventListener('click', async () => {
+    const name = document.getElementById('device-name-input').value.trim();
+    if (!name || !pendingAddId) return;
+    
+    const newId = pendingAddId;
+    document.getElementById('name-modal').style.display = 'none';
+    document.getElementById('modal-overlay').style.display = 'none';
+    pendingAddId = null;
+    
+    // Remove from discovered queue
+    discoveredQueue = discoveredQueue.filter(id => id !== newId);
+    
+    // Execute Auto-Provisioning directly
+    const feedKey = `smartled-${newId}`;
+    try {
+        const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
+            headers: { 'X-AIO-Key': AIO_KEY }
+        });
+        if (checkRes.status === 404) {
+            console.log(`🚀 Creating feed for ${newId} from PWA...`);
+            await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds`, {
+                method: 'POST',
+                headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
+                })
+            });
+        }
+    } catch (e) { console.error('Failed to auto-create feed:', e); }
+
+    // Add device to local state
+    const device = { id: newId, name };
+    knownDevices.push(device);
+    localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
+    deviceStates[device.id] = { power: 1, brightness: 127 };
+    if (!selectedId || selectedId === 'all') { selectedId = device.id; }
+    
+    renderSettingsLists();
+    renderDashboard();
+    updateGlobalStatusBar();
+});
+
+// UI Screen Toggles
+document.getElementById('settings-btn').addEventListener('click', () => {
+    document.getElementById('main-screen').style.display = 'none';
+    document.getElementById('settings-screen').style.display = 'flex';
+    renderSettingsLists();
+});
+
+document.getElementById('close-settings-btn').addEventListener('click', () => {
+    document.getElementById('settings-screen').style.display = 'none';
+    document.getElementById('main-screen').style.display = 'flex';
 });
 
 // ===========================================
