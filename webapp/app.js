@@ -31,10 +31,13 @@ function deviceFeedUrl(deviceId) {
 
 // Proper queueing so commands don't drop when button is pressed rapidly
 const _pubQueue = {};
+const _isPublishing = {}; // Track if we are currently publishing to avoid overwriting our own changes
+
 async function publishToDevice(deviceId, value) {
     if (!_pubQueue[deviceId]) _pubQueue[deviceId] = Promise.resolve();
     
     _pubQueue[deviceId] = _pubQueue[deviceId].then(async () => {
+        _isPublishing[deviceId] = true;
         try {
             const res = await fetch(deviceFeedUrl(deviceId), {
                 method: 'POST',
@@ -50,10 +53,45 @@ async function publishToDevice(deviceId, value) {
             console.error('Publish error:', e);
             await new Promise(r => setTimeout(r, 2000));
             return false;
+        } finally {
+            _isPublishing[deviceId] = false;
         }
     });
     
     return _pubQueue[deviceId];
+}
+
+// Sync device states from Adafruit IO to support multiple users simultaneously
+async function syncDeviceStates() {
+    for (const dev of knownDevices) {
+        if (_isPublishing[dev.id] || _isPublishing['all']) continue; // Don't sync if we are actively pushing commands
+        
+        try {
+            const res = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-${dev.id}/data/last`, {
+                headers: { 'X-AIO-Key': AIO_KEY }
+            });
+            if (!res.ok) continue;
+            const data = await res.json();
+            if (data && data.value) {
+                const parts = data.value.split(',');
+                if (parts.length === 2) {
+                    const power = parseInt(parts[0]);
+                    const brightness = parseInt(parts[1]);
+                    
+                    const s = deviceStates[dev.id];
+                    if (s && (s.power !== power || s.brightness !== brightness)) {
+                        s.power = power;
+                        s.brightness = brightness;
+                        updateCardUI(dev.id);
+                        const slider = document.getElementById(`slider-${dev.id}`);
+                        if (slider) slider.value = brightness;
+                    }
+                }
+            }
+        } catch (e) {
+            // Ignore background sync errors
+        }
+    }
 }
 
 // ===========================================
@@ -376,6 +414,7 @@ window.addEventListener('load', () => {
     startCamera();
     pollRegistry();
     setInterval(pollRegistry, 30000);
+    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
 });
 
 connectBtn.addEventListener('click', () => {
@@ -387,6 +426,7 @@ connectBtn.addEventListener('click', () => {
     startCamera();
     pollRegistry();
     setInterval(pollRegistry, 30000);
+    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
 });
 
 disconnectBtn.addEventListener('click', () => {
