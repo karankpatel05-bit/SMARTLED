@@ -110,8 +110,12 @@ async function pollRegistry() {
         if (!res.ok) return;
         const dataArray = await res.json();
         
+        // Only consider pings from the last 5 minutes (300,000 ms) to avoid popping up old/offline devices
+        const fiveMinsAgo = Date.now() - 300000;
+        const recentPings = dataArray.filter(d => new Date(d.created_at).getTime() > fiveMinsAgo);
+
         // Extract unique IDs from the recent history of pings
-        const uniqueIds = [...new Set(dataArray.map(d => d?.value?.trim()).filter(v => v))];
+        const uniqueIds = [...new Set(recentPings.map(d => d?.value?.trim()).filter(v => v))];
 
         for (const newId of uniqueIds) {
             // If device is already known, skip
