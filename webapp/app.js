@@ -169,7 +169,7 @@ function renderDeviceCard(device) {
     card.className = `device-card${isSel ? ' selected' : ''}`;
     card.id = `card-${device.id}`;
 
-    const macFormat = device.id.toUpperCase().match(/.{1,2}/g)?.join(':') || device.id;
+    const macFormat = `SMARTLED_SETUP_${device.id.toUpperCase()}`;
 
     card.innerHTML = `
         <div class="device-card-header">
@@ -177,7 +177,7 @@ function renderDeviceCard(device) {
                 <i class="ph ph-lightbulb device-icon${isOn ? '' : ' off'}"></i>
                 <div>
                     <div class="device-name">${device.name}</div>
-                    <div class="device-id">MAC: ${macFormat}</div>
+                    <div class="device-id">${macFormat}</div>
                 </div>
             </div>
             <div class="device-card-actions">
@@ -429,7 +429,7 @@ function renderSettingsLists() {
         dList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No new devices detected.</div>`;
     } else {
         discoveredQueue.forEach(id => {
-            const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
+            const macDisplay = `SMARTLED_SETUP_${id.toUpperCase()}`;
             dList.innerHTML += `
                 <div class="manager-list-item">
                     <div>
@@ -448,7 +448,7 @@ function renderSettingsLists() {
         sList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No devices saved.</div>`;
     } else {
         knownDevices.forEach(d => {
-            const macDisplay = d.id.toUpperCase().match(/.{1,2}/g)?.join(':') || d.id;
+            const macDisplay = `SMARTLED_SETUP_${d.id.toUpperCase()}`;
             sList.innerHTML += `
                 <div class="manager-list-item">
                     <div>
@@ -468,8 +468,8 @@ function renderSettingsLists() {
 // Global functions for inline HTML onclick handlers
 window.openNamingModal = (id) => {
     pendingAddId = id;
-    const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
-    document.getElementById('modal-mac-display').textContent = `MAC Address: ${macDisplay}`;
+    const macDisplay = `SMARTLED_SETUP_${id.toUpperCase()}`;
+    document.getElementById('modal-mac-display').textContent = `Device ID: ${macDisplay}`;
     document.getElementById('device-name-input').value = '';
     document.getElementById('name-modal').style.display = 'block';
     document.getElementById('modal-overlay').style.display = 'block';
