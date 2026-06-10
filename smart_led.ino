@@ -19,11 +19,12 @@ const int dirPin = D2; // GPIO 4 - Direction
 // ==========================================
 // Device Identity
 // ⚡ CHANGE THIS for each device you flash!
-//    e.g. "smartled_setup1", "smartled_setup2", etc.
+//    USE HYPHENS ONLY — Adafruit IO does not support underscores.
+//    e.g. "smartled-setup1", "smartled-setup2", etc.
 //    This becomes BOTH the Wi-Fi AP name AND the
 //    device identifier shown in the SmartLED app.
 // ==========================================
-#define DEVICE_NAME "smartled_setup1"
+#define DEVICE_NAME "smartled-setup1"
 
 // ==========================================
 // MQTT Client
