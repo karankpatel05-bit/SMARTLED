@@ -25,46 +25,51 @@ const selectedDeviceLabel  = document.getElementById('selected-device-label');
 const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-registry/data`;
 
 function deviceFeedUrl(deviceId) {
-    if (deviceId === 'all') return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-all/data`;
+    // Global 'all' is now handled by looping individual feeds — no shared feed cross-phone pollution
     return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${deviceId}/data`;
 }
 
-// Proper queueing so commands don't drop when button is pressed rapidly
-const _pubQueue = {};
-const _isPublishing = {}; // Track if we are currently publishing to avoid overwriting our own changes
+// Smart publish queue: each device has a pending "latest value" that replaces stale ones
+// This prevents command back-log when the slider moves faster than the 2s rate limit
+const _latestValue  = {}; // latest value waiting to be sent
+const _isPublishing = {}; // true while a fetch is in-flight
 
 async function publishToDevice(deviceId, value) {
-    if (!_pubQueue[deviceId]) _pubQueue[deviceId] = Promise.resolve();
-    
-    _pubQueue[deviceId] = _pubQueue[deviceId].then(async () => {
+    _latestValue[deviceId] = value; // Always update to the newest requested value
+    if (_isPublishing[deviceId]) return; // A send is already in-flight; it will pick up latest after
+
+    while (_latestValue[deviceId] !== undefined) {
+        const toSend = _latestValue[deviceId];
+        delete _latestValue[deviceId]; // Claim the value
         _isPublishing[deviceId] = true;
         try {
             const res = await fetch(deviceFeedUrl(deviceId), {
                 method: 'POST',
                 headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ value })
+                body: JSON.stringify({ value: toSend })
             });
-            if (!res.ok) console.error('Publish failed:', await res.text());
-            
-            // Wait 2s to comply with Adafruit IO rate limits before next publish
-            await new Promise(r => setTimeout(r, 2000));
-            return res.ok;
+            if (!res.ok) console.error(`Publish failed [${deviceId}]:`, res.status);
+            // Adafruit IO rate limit: 30 requests/min = 1 per 2s
+            await new Promise(r => setTimeout(r, 2100));
         } catch(e) {
             console.error('Publish error:', e);
-            await new Promise(r => setTimeout(r, 2000));
-            return false;
+            await new Promise(r => setTimeout(r, 2100));
         } finally {
             _isPublishing[deviceId] = false;
         }
-    });
-    
-    return _pubQueue[deviceId];
+    }
 }
 
-// Sync device states from Adafruit IO to support multiple users simultaneously
+// Publish to all knownDevices individually (NOT shared smartled-all feed)
+// This ensures only devices saved on THIS phone are controlled
+function publishToAllDevices(value) {
+    knownDevices.forEach(d => publishToDevice(d.id, value));
+}
+
+// Sync device states from Adafruit IO (10s interval to avoid rate limiting)
 async function syncDeviceStates() {
     for (const dev of knownDevices) {
-        if (_isPublishing[dev.id] || _isPublishing['all']) continue; // Don't sync if we are actively pushing commands
+        if (_isPublishing[dev.id]) continue; // Don't sync if we are actively pushing commands
         
         try {
             const res = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${dev.id}/data/last`, {
@@ -134,11 +139,11 @@ async function pollRegistry() {
         
         // Re-render settings lists if the queue changed (devices appeared or disappeared)
         const queueChanged = discoveredSomethingNew || discoveredQueue.length !== oldQueueLen;
-        if (queueChanged && document.getElementById('settings-screen').style.display === 'flex') {
+        if (queueChanged && document.getElementById('settings-screen').classList.contains('active')) {
             renderSettingsLists();
         }
 
-        if (discoveredSomethingNew && document.getElementById('settings-screen').style.display !== 'flex') {
+        if (discoveredSomethingNew && !document.getElementById('settings-screen').classList.contains('active')) {
             // Show a non-intrusive toast on the main screen
             const sb = document.getElementById('selected-device-label');
             const originalText = sb.textContent;
@@ -264,7 +269,9 @@ function renderGlobalCard() {
 
         clearTimeout(globalSliderTimer);
         globalSliderTimer = setTimeout(() => {
-            publishToDevice('all', `${power},${val}`);
+            // FIX: Publish to each saved device individually, NOT the shared smartled-all feed.
+            // This ensures only THIS phone's configured devices are controlled.
+            publishToAllDevices(`${power},${val}`);
         }, 200);
     });
 }
@@ -395,7 +402,8 @@ function sendToSelected(power, brightness) {
         if (globalSlider) globalSlider.value = brightness;
         const globalPct = document.getElementById('pct-all');
         if (globalPct) globalPct.textContent = `${Math.round((brightness / 255) * 100)}%`;
-        publishToDevice('all', `${power},${brightness}`);
+        // FIX: Use per-device publish, not shared feed
+        publishToAllDevices(`${power},${brightness}`);
         updateGlobalStatusBar();
     } else {
         deviceStates[selectedId] = { power, brightness };
@@ -426,7 +434,7 @@ function startAppIntervals() {
     if (_syncInterval) clearInterval(_syncInterval);
     pollRegistry();
     _pollInterval = setInterval(pollRegistry, 30000);
-    _syncInterval = setInterval(syncDeviceStates, 5000);
+    _syncInterval = setInterval(syncDeviceStates, 10000); // 10s to stay within rate limits
 }
 
 // Bug #1 fix: Removed auto-start on 'load'. User must always press the button.
@@ -586,14 +594,14 @@ document.getElementById('modal-save-btn').addEventListener('click', async () => 
 
 // UI Screen Toggles
 document.getElementById('settings-btn').addEventListener('click', () => {
-    document.getElementById('main-screen').style.display = 'none';
-    document.getElementById('settings-screen').style.display = 'flex';
+    document.getElementById('main-screen').classList.remove('active');
+    document.getElementById('settings-screen').classList.add('active');
     renderSettingsLists();
 });
 
 document.getElementById('close-settings-btn').addEventListener('click', () => {
-    document.getElementById('settings-screen').style.display = 'none';
-    document.getElementById('main-screen').style.display = 'flex';
+    document.getElementById('settings-screen').classList.remove('active');
+    document.getElementById('main-screen').classList.add('active');
 });
 
 // Settings Tabs Logic

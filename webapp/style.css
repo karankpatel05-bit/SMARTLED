@@ -1,186 +1,110 @@
-/* ============================================================
-   SMARTLED PWA — Premium UI v2.0
-   Deep glassmorphism, fluid animations, rich micro-interactions
-   ============================================================ */
-
-/* ==========================================
-   Design Tokens
-   ========================================== */
 :root {
-    --bg-dark:         #060d1a;
-    --panel-bg:        rgba(10, 20, 40, 0.72);
-    --panel-border:    rgba(255, 255, 255, 0.08);
-    --panel-border-hi: rgba(255, 255, 255, 0.16);
-    --primary:         #4f8bff;
-    --primary-dim:     rgba(79, 139, 255, 0.15);
-    --primary-glow:    rgba(79, 139, 255, 0.35);
-    --accent:          #a78bfa;
-    --accent-dim:      rgba(167, 139, 250, 0.15);
-    --success:         #34d399;
-    --success-dim:     rgba(52, 211, 153, 0.15);
-    --success-glow:    rgba(52, 211, 153, 0.4);
-    --warning:         #fbbf24;
-    --warning-glow:    rgba(251, 191, 36, 0.45);
-    --danger:          #f87171;
-    --danger-dim:      rgba(248, 113, 113, 0.15);
-    --text-main:       #f0f6ff;
-    --text-muted:      #64748b;
-    --text-soft:       #94a3b8;
-    --radius-card:     20px;
-    --radius-sm:       12px;
-    --shadow-card:     0 24px 60px rgba(0,0,0,0.6);
-    --shadow-glow-blue: 0 0 24px rgba(79, 139, 255, 0.25);
+    --bg-color: #0f172a;
+    --panel-bg: rgba(30, 41, 59, 0.7);
+    --panel-border: rgba(255, 255, 255, 0.1);
+    --primary: #3b82f6;
+    --primary-hover: #2563eb;
+    --text-main: #f8fafc;
+    --text-muted: #94a3b8;
+    --success: #10b981;
+    --danger: #ef4444;
 }
 
-/* ==========================================
-   Base Reset
-   ========================================== */
-*, *::before, *::after {
+* {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    -webkit-tap-highlight-color: transparent;
+    font-family: 'Inter', sans-serif;
 }
 
-/* ==========================================
-   Body — Animated Gradient Background
-   ========================================== */
 body {
-    background-color: var(--bg-dark);
-    background-image:
-        radial-gradient(ellipse 80% 60% at 20% -10%, rgba(79, 139, 255, 0.18) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 50% at 80% 100%, rgba(167, 139, 250, 0.15) 0%, transparent 60%),
-        radial-gradient(ellipse 50% 40% at 50% 50%, rgba(6, 13, 26, 1) 0%, transparent 100%);
+    background-color: var(--bg-color);
+    background-image: 
+        radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), 
+        radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
+        radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+    background-attachment: fixed;
     color: var(--text-main);
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    height: 100vh;
+    width: 100vw;
     overflow: hidden;
-}
-
-/* Subtle animated noise texture overlay */
-body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
-    pointer-events: none;
-    z-index: 0;
-}
-
-/* ==========================================
-   Glassmorphism Panel
-   ========================================== */
-.glass-panel {
     position: relative;
+}
+
+/* Glassmorphism Panel */
+.glass-panel {
     background: var(--panel-bg);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--panel-border);
-    border-radius: 28px;
-    padding: 1.75rem 1.5rem;
-    width: 92%;
-    max-width: 440px;
-    box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255,255,255,0.07);
+    border-radius: 24px;
+    padding: 2rem;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    /* Hidden by default — positioned absolutely to fill the viewport */
     display: none;
     flex-direction: column;
-    animation: slideUp 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-    max-height: 96vh;
+    animation: fadeIn 0.4s ease-out;
     overflow-y: auto;
-    overflow-x: hidden;
-    z-index: 1;
-}
-
-.glass-panel::before {
-    content: '';
+    /* Full-screen overlay: only active panel is visible */
     position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-    border-radius: 28px 28px 0 0;
-    pointer-events: none;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 0;
 }
 
-/* Scrollbar */
-.glass-panel::-webkit-scrollbar { width: 4px; }
-.glass-panel::-webkit-scrollbar-track { background: transparent; }
+.glass-panel::-webkit-scrollbar {
+    width: 6px;
+}
+.glass-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
 .glass-panel::-webkit-scrollbar-thumb {
-    background: rgba(255,255,255,0.12);
-    border-radius: 4px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 3px;
 }
 
-.glass-panel.active { display: flex; }
-
-@keyframes slideUp {
-    from { opacity: 0; transform: translateY(28px) scale(0.97); }
-    to   { opacity: 1; transform: translateY(0)   scale(1); }
+.glass-panel.active {
+    display: flex;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes pulse {
-    0%   { transform: scale(1);   opacity: 1; }
-    50%  { transform: scale(1.2); opacity: 0.7; }
-    100% { transform: scale(1);   opacity: 1; }
-}
-
-@keyframes glow-pulse {
-    0%, 100% { box-shadow: 0 0 8px var(--success-glow); }
-    50%       { box-shadow: 0 0 20px var(--success-glow); }
-}
-
-@keyframes spin-slow {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
-}
-
-/* ==========================================
-   Connection / Welcome Screen
-   ========================================== */
+/* Connection Screen */
 .logo-container {
     text-align: center;
-    margin-bottom: 1.5rem;
-    padding-top: 0.5rem;
+    margin-bottom: 0.5rem;
 }
 
 .bulb-icon {
-    font-size: 3.5rem;
-    color: var(--warning);
-    filter: drop-shadow(0 0 18px var(--warning-glow));
+    font-size: 4rem;
+    color: #eab308;
+    filter: drop-shadow(0 0 15px rgba(234, 179, 8, 0.5));
     margin-bottom: 1rem;
-    display: block;
-    animation: glow-pulse 3s ease-in-out infinite;
 }
 
 h1 {
     font-size: 2rem;
     font-weight: 800;
-    letter-spacing: -0.03em;
-    background: linear-gradient(135deg, #f0f6ff 30%, var(--accent) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
     margin-bottom: 0.25rem;
 }
 
 p {
     text-align: center;
-    color: var(--text-soft);
+    color: var(--text-muted);
     margin-bottom: 2rem;
-    font-size: 0.9rem;
 }
 
-/* ==========================================
-   Inputs
-   ========================================== */
 .input-group {
     position: relative;
-    margin-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
 }
 
 .input-group i {
@@ -188,252 +112,177 @@ p {
     left: 1rem;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 1.1rem;
+    font-size: 1.25rem;
     color: var(--text-muted);
 }
 
-input, input[type="text"] {
+input {
     width: 100%;
-    background: rgba(6, 13, 26, 0.6);
-    border: 1px solid var(--panel-border-hi);
-    border-radius: var(--radius-sm);
-    padding: 0.9rem 1rem 0.9rem 3rem;
-    color: var(--text-main);
-    font-size: 0.95rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 1rem 1rem 1rem 3rem;
+    color: white;
+    font-size: 1rem;
     outline: none;
-    transition: border-color 0.25s, box-shadow 0.25s;
+    transition: border-color 0.3s;
 }
 
 input:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 3px var(--primary-dim);
 }
 
-/* ==========================================
-   Primary Button — Gradient + Glow
-   ========================================== */
 .primary-btn {
     width: 100%;
-    background: linear-gradient(135deg, var(--primary), #7c3aed);
+    background: var(--primary);
     color: white;
     border: none;
-    border-radius: var(--radius-sm);
-    padding: 0.95rem;
-    font-size: 1rem;
-    font-weight: 700;
-    letter-spacing: 0.01em;
+    border-radius: 12px;
+    padding: 1rem;
+    font-size: 1.1rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: transform 0.15s, box-shadow 0.25s, filter 0.25s;
-    box-shadow: 0 6px 24px rgba(79, 139, 255, 0.3);
-    position: relative;
-    overflow: hidden;
-}
-
-.primary-btn::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
-    border-radius: inherit;
+    transition: background 0.3s, transform 0.1s;
 }
 
 .primary-btn:hover {
-    filter: brightness(1.12);
-    box-shadow: 0 8px 30px rgba(79, 139, 255, 0.45);
+    background: var(--primary-hover);
 }
 
 .primary-btn:active {
-    transform: scale(0.97);
-    box-shadow: 0 3px 12px rgba(79, 139, 255, 0.25);
+    transform: scale(0.98);
 }
 
 #connection-status {
     text-align: center;
     margin-top: 1rem;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
     color: var(--danger);
     min-height: 1.2rem;
 }
 
-/* ==========================================
-   Main Screen — Header
-   ========================================== */
+/* Main Screen Header */
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 1.25rem;
-    gap: 0.5rem;
+    margin-bottom: 1.5rem;
 }
 
 .status-indicator {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.82rem;
+    font-size: 0.9rem;
     font-weight: 600;
-    background: rgba(0, 0, 0, 0.35);
-    border: 1px solid rgba(255,255,255,0.06);
-    padding: 0.45rem 0.9rem;
+    background: rgba(0,0,0,0.3);
+    padding: 0.5rem 1rem;
     border-radius: 20px;
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-}
-
-#selected-device-label {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
 }
 
 .dot {
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    flex-shrink: 0;
 }
 
 .dot.connected {
     background-color: var(--success);
-    animation: glow-pulse 2.5s ease-in-out infinite;
+    box-shadow: 0 0 10px var(--success);
 }
 
-/* ==========================================
-   Icon Button
-   ========================================== */
 .icon-btn {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text-soft);
-    width: 38px;
-    height: 38px;
+    background: rgba(255,255,255,0.1);
+    border: none;
+    color: white;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     display: flex;
     justify-content: center;
     align-items: center;
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     cursor: pointer;
-    transition: background 0.2s, color 0.2s, transform 0.15s;
-    flex-shrink: 0;
+    transition: background 0.2s;
 }
 
 .icon-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: var(--text-main);
-    transform: scale(1.05);
+    background: rgba(255,255,255,0.2);
 }
 
-.icon-btn:active {
-    transform: scale(0.95);
-}
-
-/* ==========================================
-   Camera Container
-   ========================================== */
+/* Camera Container */
 .camera-container {
     position: relative;
     width: 100%;
-    aspect-ratio: 4/3;
+    aspect-ratio: 16/9;
     background: #000;
-    border-radius: var(--radius-card);
+    border-radius: 16px;
     overflow: hidden;
-    box-shadow: var(--shadow-glow-blue), 0 10px 30px rgba(0,0,0,0.5);
-    border: 1px solid rgba(79, 139, 255, 0.15);
+    margin-bottom: 0;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
 }
 
-/* Corner accents on camera */
-.camera-container::before,
-.camera-container::after {
-    content: '';
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    border-color: var(--primary);
-    border-style: solid;
-    opacity: 0.6;
-    z-index: 2;
+video {
+    display: none;
 }
-.camera-container::before {
-    top: 8px; left: 8px;
-    border-width: 2px 0 0 2px;
-    border-radius: 4px 0 0 0;
-}
-.camera-container::after {
-    bottom: 8px; right: 8px;
-    border-width: 0 2px 2px 0;
-    border-radius: 0 0 4px 0;
-}
-
-video { display: none; }
 
 canvas {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transform: scaleX(-1);
+    transform: scaleX(-1); /* mirror */
 }
 
-/* ==========================================
-   LED Status Bar — Below Camera
-   ========================================== */
+/* LED Status Bar — below camera */
 .led-status-overlay {
-    background: rgba(6, 13, 26, 0.8);
-    backdrop-filter: blur(10px);
-    border-radius: 0 0 var(--radius-card) var(--radius-card);
+    background: rgba(15, 23, 42, 0.7);
+    backdrop-filter: blur(8px);
+    border-radius: 0 0 16px 16px;
     padding: 0.6rem 1.25rem;
     display: flex;
     align-items: center;
     gap: 1rem;
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
     border-top: none;
     width: 100%;
-    margin-bottom: 1rem;
+    margin-bottom: 1.2rem;
 }
 
 #status-icon {
-    font-size: 1.4rem;
-    color: var(--warning);
-    filter: drop-shadow(0 0 6px var(--warning-glow));
-    transition: all 0.3s;
+    font-size: 1.5rem;
+    color: #eab308;
 }
 
 #status-icon.off {
     color: var(--text-muted);
-    filter: none;
 }
 
 .progress-bar-container {
     flex-grow: 1;
-    height: 6px;
-    background: rgba(255,255,255,0.08);
-    border-radius: 3px;
+    height: 8px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
     overflow: hidden;
 }
 
 .progress-bar {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, var(--primary), var(--warning));
-    border-radius: 3px;
-    transition: width 0.35s ease;
-    box-shadow: 0 0 8px rgba(79,139,255,0.4);
+    background: linear-gradient(90deg, #3b82f6, #eab308);
+    transition: width 0.3s ease;
 }
 
 #brightness-text {
-    font-weight: 700;
-    font-size: 0.85rem;
-    width: 4ch;
+    font-weight: 600;
+    font-size: 0.9rem;
+    width: 3ch;
     text-align: right;
-    color: var(--text-soft);
 }
 
-/* ==========================================
-   Controls Panel — Voice & Camera Buttons
-   ========================================== */
+/* Controls Panel */
 .controls-panel {
     display: flex;
-    gap: 0.75rem;
+    gap: 1rem;
 }
 
 .action-btn {
@@ -441,164 +290,80 @@ canvas {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.4rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    padding: 0.9rem 0.75rem;
-    border-radius: var(--radius-sm);
-    color: var(--text-soft);
-    font-size: 0.78rem;
-    font-weight: 600;
+    gap: 0.5rem;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    padding: 1rem;
+    border-radius: 16px;
+    color: white;
     cursor: pointer;
-    transition: all 0.2s ease;
-    letter-spacing: 0.02em;
+    transition: all 0.2s;
 }
 
 .action-btn i {
-    font-size: 1.4rem;
+    font-size: 1.5rem;
     color: var(--primary);
-    transition: transform 0.2s;
 }
 
 .action-btn:hover {
-    background: var(--primary-dim);
-    border-color: rgba(79,139,255,0.25);
-    color: var(--text-main);
-}
-
-.action-btn:hover i {
-    transform: scale(1.1);
+    background: rgba(255,255,255,0.1);
+    border-color: rgba(255,255,255,0.2);
 }
 
 .action-btn.listening {
-    background: var(--danger-dim);
+    background: rgba(239, 68, 68, 0.1);
     border-color: var(--danger);
 }
 
 .action-btn.listening i {
     color: var(--danger);
-    animation: pulse 1.2s ease-in-out infinite;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .transcript {
     text-align: center;
-    margin-top: 0.75rem;
-    font-size: 0.8rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
     color: var(--text-muted);
     font-style: italic;
     min-height: 1.2rem;
-    line-height: 1.4;
 }
 
-/* ==========================================
-   Fleet Dashboard — Device Cards
-   ========================================== */
-#dashboard {
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-    margin-top: 0.75rem;
+/* Manual Controls */
+.manual-controls {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
 }
 
-.device-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--panel-border-hi);
-    border-radius: var(--radius-card);
-    padding: 1rem 1.1rem;
-    transition: border-color 0.25s, box-shadow 0.25s, transform 0.15s;
-    position: relative;
-    overflow: hidden;
-}
-
-/* Shimmer on hover */
-.device-card::after {
-    content: '';
-    position: absolute;
-    top: 0; left: -100%;
-    width: 60%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.03), transparent);
-    transition: left 0.5s ease;
-    pointer-events: none;
-}
-
-.device-card:hover::after { left: 150%; }
-
-.device-card:hover {
-    border-color: rgba(255,255,255,0.16);
-    transform: translateY(-1px);
-}
-
-.device-card.selected {
-    border-color: rgba(79, 139, 255, 0.5);
-    background: var(--primary-dim);
-    box-shadow: 0 0 20px rgba(79, 139, 255, 0.1), inset 0 1px 0 rgba(79,139,255,0.15);
-}
-
-.device-card-header {
+.manual-controls-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-}
-
-.device-info {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    flex: 1;
-    min-width: 0;
-}
-
-.device-icon {
-    font-size: 1.6rem;
-    color: var(--warning);
-    filter: drop-shadow(0 0 8px var(--warning-glow));
-    transition: all 0.35s;
-    flex-shrink: 0;
-}
-
-.device-icon.off {
+    margin-bottom: 1rem;
+    font-size: 0.85rem;
+    font-weight: 600;
     color: var(--text-muted);
-    filter: none;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
-.device-name {
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.device-id {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    margin-top: 2px;
-    font-family: 'SF Mono', 'Fira Mono', monospace;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.device-card-actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-/* ==========================================
-   Power Button
-   ========================================== */
 .power-btn {
-    width: 42px;
-    height: 42px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
-    border: 1.5px solid rgba(255,255,255,0.2);
-    background: rgba(255, 255, 255, 0.04);
+    border: 2px solid var(--text-muted);
+    background: rgba(255, 255, 255, 0.05);
     color: var(--text-muted);
-    font-size: 1.1rem;
+    font-size: 1.3rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -609,51 +374,24 @@ canvas {
 .power-btn.on {
     border-color: var(--success);
     color: var(--success);
-    background: var(--success-dim);
-    box-shadow: 0 0 16px var(--success-glow);
+    background: rgba(16, 185, 129, 0.12);
+    box-shadow: 0 0 14px rgba(16, 185, 129, 0.35);
 }
 
-.power-btn:active { transform: scale(0.88); }
-
-/* ==========================================
-   Select Button
-   ========================================== */
-.select-btn {
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
-    border: 1.5px solid rgba(255,255,255,0.12);
-    background: rgba(255,255,255,0.04);
-    color: var(--text-muted);
-    font-size: 0.95rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.power-btn.on:active,
+.power-btn:active {
+    transform: scale(0.9);
 }
 
-.select-btn.active {
-    border-color: var(--primary);
-    color: var(--primary);
-    background: var(--primary-dim);
-    box-shadow: 0 0 10px var(--primary-glow);
-}
-
-.select-btn:hover { border-color: rgba(255,255,255,0.25); }
-
-/* ==========================================
-   Brightness Slider
-   ========================================== */
+/* Brightness Slider */
 .slider-row {
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-top: 0.85rem;
 }
 
 .slider-icon {
-    font-size: 1rem;
+    font-size: 1.2rem;
     color: var(--text-muted);
     flex-shrink: 0;
 }
@@ -662,7 +400,7 @@ canvas {
     flex: 1;
     -webkit-appearance: none;
     appearance: none;
-    height: 5px;
+    height: 6px;
     border-radius: 3px;
     background: rgba(255, 255, 255, 0.1);
     outline: none;
@@ -674,198 +412,276 @@ canvas {
 .brightness-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border-radius: 50%;
-    background: linear-gradient(135deg, var(--primary), var(--accent));
-    box-shadow: 0 0 10px var(--primary-glow);
+    background: var(--primary);
+    box-shadow: 0 0 8px rgba(59, 130, 246, 0.6);
     cursor: pointer;
     transition: transform 0.15s ease, box-shadow 0.15s;
-    border: 2px solid rgba(255,255,255,0.2);
 }
 
 .brightness-slider::-webkit-slider-thumb:active {
-    transform: scale(1.3);
-    box-shadow: 0 0 18px var(--primary-glow);
+    transform: scale(1.2);
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.8);
 }
 
 .slider-label {
     text-align: center;
-    margin-top: 0.4rem;
-    font-size: 0.8rem;
-    font-weight: 700;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
     color: var(--text-muted);
 }
 
 /* ==========================================
-   No Devices Message
+   Fleet Dashboard — Device Cards
    ========================================== */
+#dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.device-card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 1rem 1.25rem;
+    transition: border-color 0.25s;
+}
+
+.device-card.selected {
+    border-color: var(--primary);
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.device-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.device-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.device-icon {
+    font-size: 1.75rem;
+    color: #eab308;
+    filter: drop-shadow(0 0 6px rgba(234, 179, 8, 0.5));
+    transition: all 0.3s;
+}
+
+.device-icon.off {
+    color: var(--text-muted);
+    filter: none;
+}
+
+.device-name {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.device-id {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.device-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.select-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-muted);
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.select-btn.active {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: rgba(59, 130, 246, 0.15);
+}
+
+.reset-btn {
+    margin-top: 0.75rem;
+    width: 100%;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 10px;
+    color: #ef4444;
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.5rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    transition: background 0.2s;
+}
+
+.reset-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+}
+
 .no-devices-msg {
     display: flex;
     flex-direction: column;
     align-items: center;
     padding: 1.5rem 0;
-    color: var(--text-muted);
-    gap: 0.5rem;
-    text-align: center;
-    font-size: 0.85rem;
 }
 
 /* ==========================================
-   Settings / Device Manager Screen
-   ========================================== */
-#settings-screen header h1 {
-    font-size: 1.25rem;
-    font-weight: 800;
-    background: linear-gradient(135deg, var(--text-main), var(--accent));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-/* ==========================================
-   Tabs
-   ========================================== */
-.settings-tabs {
-    display: flex;
-    gap: 0.25rem;
-    margin-top: 1rem;
-    background: rgba(0,0,0,0.3);
-    border: 1px solid rgba(255,255,255,0.07);
-    border-radius: var(--radius-sm);
-    padding: 4px;
-}
-
-.tab-btn {
-    flex: 1;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    font-size: 0.85rem;
-    font-weight: 600;
-    padding: 0.55rem 0;
-    cursor: pointer;
-    border-radius: 9px;
-    transition: all 0.25s ease;
-}
-
-.tab-btn.active {
-    background: rgba(79, 139, 255, 0.2);
-    color: var(--primary);
-    box-shadow: 0 0 12px rgba(79,139,255,0.15);
-}
-
-.tab-content {
-    display: none;
-    animation: fadeIn 0.25s ease;
-}
-
-.tab-content.active { display: block; }
-
-/* ==========================================
-   Manager List Items
+   Device Manager Styles
    ========================================== */
 .manager-list-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    padding: 0.8rem 1rem;
-    border-radius: var(--radius-sm);
-    transition: border-color 0.2s, background 0.2s;
-    gap: 0.75rem;
-}
-
-.manager-list-item:hover {
-    border-color: rgba(255,255,255,0.13);
-    background: rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
 }
 
 .manager-list-item .mac-text {
-    font-size: 0.75rem;
-    font-family: 'SF Mono', 'Fira Mono', monospace;
+    font-size: 0.85rem;
+    font-family: monospace;
     color: var(--text-muted);
-    margin-top: 2px;
 }
 
 .manager-list-item .name-text {
-    font-weight: 700;
-    font-size: 0.9rem;
-    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.95rem;
 }
 
 .manager-btn {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255,255,255,0.1);
-    color: var(--text-soft);
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
     padding: 0.4rem 0.8rem;
     border-radius: 8px;
-    font-size: 0.78rem;
-    font-weight: 700;
+    font-size: 0.8rem;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s;
-    white-space: nowrap;
+    transition: background 0.2s;
 }
 
 .manager-btn.add {
-    background: var(--success-dim);
-    color: var(--success);
-    border-color: rgba(52, 211, 153, 0.25);
+    background: rgba(16, 185, 129, 0.2);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
 }
 
 .manager-btn.delete {
-    background: var(--danger-dim);
-    color: var(--danger);
-    border-color: rgba(248, 113, 113, 0.25);
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
 }
 
-.manager-btn:hover { filter: brightness(1.2); transform: scale(1.03); }
+.manager-btn:hover {
+    filter: brightness(1.2);
+}
 
 /* ==========================================
-   How to Use — Guide Steps
+   Tabs & Guide Styles
    ========================================== */
-.guide-step {
+.settings-tabs {
     display: flex;
     gap: 1rem;
-    align-items: flex-start;
-    background: rgba(255, 255, 255, 0.025);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 1rem;
-    border-radius: var(--radius-card);
-    margin-top: 0.85rem;
-    transition: border-color 0.2s, transform 0.2s;
+    margin-top: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 0.5rem;
 }
 
-.guide-step:hover {
-    border-color: rgba(255,255,255,0.12);
-    transform: translateX(3px);
+.tab-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 0.5rem 0.5rem;
+    cursor: pointer;
+    position: relative;
+    transition: color 0.3s;
+}
+
+.tab-btn.active {
+    color: var(--primary);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -0.5rem;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: var(--primary);
+    border-radius: 2px;
+    box-shadow: 0 -2px 8px rgba(59, 130, 246, 0.5);
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease-out;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+.guide-step {
+    display: flex;
+    gap: 1.25rem;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1rem;
+    border-radius: 16px;
+    margin-top: 1rem;
 }
 
 .step-icon-wrap {
     flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.6rem;
-    border: 1px solid rgba(255,255,255,0.08);
+    font-size: 1.75rem;
 }
 
 .step-text h4 {
-    font-size: 0.92rem;
-    font-weight: 700;
-    margin-bottom: 0.3rem;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
     color: var(--text-main);
 }
 
 .step-text p {
-    font-size: 0.78rem;
-    color: var(--text-soft);
-    text-align: left;
-    line-height: 1.5;
+    font-size: 0.8rem;
+    color: var(--text-muted);
     margin: 0;
+    text-align: left;
+    line-height: 1.4;
 }
+

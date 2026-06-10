@@ -26,8 +26,8 @@
     <!-- Configuration (credentials injected by build) -->
     <script src="config.js"></script>
 
-    <!-- Phosphor Icons -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Phosphor Icons (pinned to stable version for Android WebView compatibility) -->
+    <script src="https://unpkg.com/@phosphor-icons/web@2.1.1/src/index.js"></script>
 </head>
 <body>
 
@@ -89,7 +89,7 @@
     </div>
 
     <!-- Device Manager / Settings Screen -->
-    <div id="settings-screen" class="glass-panel" style="display: none;">
+    <div id="settings-screen" class="glass-panel">
         <header>
             <h1>Device Manager</h1>
             <button id="close-settings-btn" class="icon-btn"><i class="ph ph-x"></i></button>
