@@ -111,12 +111,16 @@ async function pollRegistry() {
         if (!res.ok) return;
         const dataArray = await res.json();
         
-        // Only consider pings from the last 5 minutes (300,000 ms) to avoid popping up old/offline devices
-        const fiveMinsAgo = Date.now() - 300000;
-        const recentPings = dataArray.filter(d => new Date(d.created_at).getTime() > fiveMinsAgo);
+        // Live Discovery: Only consider pings from the last 2 minutes (120000 ms)
+        const twoMinsAgo = Date.now() - 120000;
+        const recentPings = dataArray.filter(d => new Date(d.created_at).getTime() > twoMinsAgo);
 
         // Extract unique IDs from the recent history of pings
         const uniqueIds = [...new Set(recentPings.map(d => d?.value?.trim()).filter(v => v))];
+
+        // Clean up offline devices from discovered queue
+        const oldQueueLen = discoveredQueue.length;
+        discoveredQueue = discoveredQueue.filter(id => uniqueIds.includes(id));
 
         let discoveredSomethingNew = false;
         for (const newId of uniqueIds) {
@@ -127,21 +131,23 @@ async function pollRegistry() {
             discoveredQueue.push(newId);
             discoveredSomethingNew = true;
         }
+        
+        // Re-render settings lists if the queue changed (devices appeared or disappeared)
+        const queueChanged = discoveredSomethingNew || discoveredQueue.length !== oldQueueLen;
+        if (queueChanged && document.getElementById('settings-screen').style.display === 'flex') {
+            renderSettingsLists();
+        }
 
-        if (discoveredSomethingNew) {
-            if (document.getElementById('settings-screen').style.display === 'flex') {
-                renderSettingsLists();
-            } else {
-                // Show a non-intrusive toast on the main screen
-                const sb = document.getElementById('selected-device-label');
-                const originalText = sb.textContent;
-                sb.textContent = `🔔 New device found! Open Settings`;
-                sb.style.color = '#10b981'; // var(--success)
-                setTimeout(() => {
-                    sb.style.color = '';
-                    updateGlobalStatusBar();
-                }, 5000);
-            }
+        if (discoveredSomethingNew && document.getElementById('settings-screen').style.display !== 'flex') {
+            // Show a non-intrusive toast on the main screen
+            const sb = document.getElementById('selected-device-label');
+            const originalText = sb.textContent;
+            sb.textContent = `🔔 New device found! Open Settings`;
+            sb.style.color = '#10b981'; // var(--success)
+            setTimeout(() => {
+                sb.style.color = '';
+                updateGlobalStatusBar();
+            }, 5000);
         }
     } catch(e) {
         console.error('Registry poll error:', e);
@@ -257,7 +263,7 @@ function renderGlobalCard() {
         clearTimeout(globalSliderTimer);
         globalSliderTimer = setTimeout(() => {
             publishToDevice('all', `${power},${val}`);
-        }, 500);
+        }, 200);
     });
 }
 
@@ -295,7 +301,7 @@ function attachCardListeners(device) {
         sliderTimer = setTimeout(() => {
             const s = deviceStates[id];
             publishToDevice(id, `${s.power},${s.brightness}`);
-        }, 500);
+        }, 200);
     });
 }
 
@@ -315,12 +321,39 @@ function updateCardUI(deviceId) {
 }
 
 function updateGlobalStatusBar() {
+    if (selectedId === 'all') {
+        selectedDeviceLabel.textContent = '🎯 Global Control';
+        if (knownDevices.length === 0) return;
+        
+        // Calculate average brightness
+        let totalPct = 0;
+        let anyOn = false;
+        knownDevices.forEach(d => {
+            const s = deviceStates[d.id];
+            if (s && s.power === 1 && s.brightness > 0) {
+                totalPct += (s.brightness / 255) * 100;
+                anyOn = true;
+            }
+        });
+        const avgP = anyOn ? totalPct / knownDevices.length : 0;
+        
+        brightnessBar.style.width  = `${avgP}%`;
+        brightnessText.textContent = `${Math.round(avgP)}%`;
+        statusIcon.className = `ph ph-globe-hemisphere-west${!anyOn ? ' off' : ''}`;
+        statusIcon.style.filter = anyOn 
+            ? `drop-shadow(0 0 ${10 + avgP / 10}px rgba(59,130,246,${0.5 + avgP / 200}))`
+            : 'none';
+        return;
+    }
+
     const name  = knownDevices.find(d => d.id === selectedId)?.name;
     selectedDeviceLabel.textContent = name ? `🎯 ${name}` : 'No device selected';
 
     if (!selectedId || !deviceStates[selectedId]) {
         brightnessText.textContent = '–';
         brightnessBar.style.width = '0%';
+        statusIcon.className = 'ph ph-lightbulb off';
+        statusIcon.style.filter = 'none';
         return;
     }
     const s = deviceStates[selectedId];
@@ -471,11 +504,25 @@ window.openNamingModal = (id) => {
     document.getElementById('modal-overlay').style.display = 'block';
 };
 
-window.deleteDevice = (id) => {
-    if (confirm('Are you sure you want to completely remove this device from the app?')) {
+window.deleteDevice = async (id) => {
+    if (confirm('Are you sure you want to completely remove this device from the app? This will also delete its Adafruit IO feed.')) {
+        // Delete feed from Adafruit IO to free up limit
+        try {
+            console.log(`🗑️ Deleting Adafruit IO feed for ${id}...`);
+            await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${id}`, {
+                method: 'DELETE',
+                headers: { 'X-AIO-Key': AIO_KEY }
+            });
+        } catch(e) { console.error('Failed to delete feed:', e); }
+
         knownDevices = knownDevices.filter(d => d.id !== id);
+        delete deviceStates[id];
         localStorage.setItem('smartled_devices', JSON.stringify(knownDevices));
-        if (selectedId === id) selectedId = knownDevices.length > 0 ? knownDevices[0].id : null;
+        
+        if (selectedId === id) {
+            selectedId = knownDevices.length > 0 ? knownDevices[0].id : null;
+        }
+        
         renderSettingsLists();
         renderDashboard();
         updateGlobalStatusBar();

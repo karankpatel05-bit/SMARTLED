@@ -134,9 +134,22 @@ void setup() {
 }
 
 // ==========================================
-// Loop
+// Loop & Heartbeat
 // ==========================================
+unsigned long lastPingTime = 0;
+const unsigned long PING_INTERVAL = 60000; // 60 seconds
+
 void loop() {
-  if (!mqtt.connected()) connectMQTT();
+  if (!mqtt.connected()) {
+    connectMQTT();
+  } else {
+    // Send a heartbeat ping every 60 seconds so the app knows we are online
+    if (millis() - lastPingTime > PING_INTERVAL) {
+      lastPingTime = millis();
+      String registryTopic = String(AIO_USERNAME) + "/feeds/smartled-registry";
+      mqtt.publish(registryTopic.c_str(), DEVICE_NAME);
+      Serial.printf("Heartbeat ping sent: %s\n", DEVICE_NAME);
+    }
+  }
   mqtt.loop();
 }
