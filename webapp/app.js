@@ -26,7 +26,7 @@ const AIO_REGISTRY_URL = `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/s
 
 function deviceFeedUrl(deviceId) {
     if (deviceId === 'all') return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-all/data`;
-    return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-${deviceId}/data`;
+    return `https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${deviceId}/data`;
 }
 
 // Proper queueing so commands don't drop when button is pressed rapidly
@@ -67,7 +67,7 @@ async function syncDeviceStates() {
         if (_isPublishing[dev.id] || _isPublishing['all']) continue; // Don't sync if we are actively pushing commands
         
         try {
-            const res = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/smartled-${dev.id}/data/last`, {
+            const res = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${dev.id}/data/last`, {
                 headers: { 'X-AIO-Key': AIO_KEY }
             });
             if (!res.ok) continue;
@@ -169,15 +169,13 @@ function renderDeviceCard(device) {
     card.className = `device-card${isSel ? ' selected' : ''}`;
     card.id = `card-${device.id}`;
 
-    const macFormat = `SMARTLED_SETUP_${device.id.toUpperCase()}`;
-
     card.innerHTML = `
         <div class="device-card-header">
             <div class="device-info">
                 <i class="ph ph-lightbulb device-icon${isOn ? '' : ' off'}"></i>
                 <div>
                     <div class="device-name">${device.name}</div>
-                    <div class="device-id">${macFormat}</div>
+                    <div class="device-id">ID: ${device.id}</div>
                 </div>
             </div>
             <div class="device-card-actions">
@@ -429,7 +427,7 @@ function renderSettingsLists() {
         dList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No new devices detected.</div>`;
     } else {
         discoveredQueue.forEach(id => {
-            const macDisplay = `SMARTLED_SETUP_${id.toUpperCase()}`;
+            const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
             dList.innerHTML += `
                 <div class="manager-list-item">
                     <div>
@@ -448,12 +446,11 @@ function renderSettingsLists() {
         sList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No devices saved.</div>`;
     } else {
         knownDevices.forEach(d => {
-            const macDisplay = `SMARTLED_SETUP_${d.id.toUpperCase()}`;
             sList.innerHTML += `
                 <div class="manager-list-item">
                     <div>
                         <div class="name-text">${d.name}</div>
-                        <div class="mac-text">${macDisplay}</div>
+                        <div class="mac-text">ID: ${d.id}</div>
                     </div>
                     <div style="display:flex;gap:0.5rem;">
                         <button class="manager-btn delete" onclick="deleteDevice('${d.id}')">Delete</button>
@@ -468,8 +465,7 @@ function renderSettingsLists() {
 // Global functions for inline HTML onclick handlers
 window.openNamingModal = (id) => {
     pendingAddId = id;
-    const macDisplay = `SMARTLED_SETUP_${id.toUpperCase()}`;
-    document.getElementById('modal-mac-display').textContent = `Device ID: ${macDisplay}`;
+    document.getElementById('modal-mac-display').textContent = `Device ID: ${id}`;
     document.getElementById('device-name-input').value = '';
     document.getElementById('name-modal').style.display = 'block';
     document.getElementById('modal-overlay').style.display = 'block';
@@ -523,7 +519,7 @@ document.getElementById('modal-save-btn').addEventListener('click', async () => 
                 method: 'POST',
                 headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    feed: { name: feedKey, key: feedKey, description: "Auto-generated feed for SMARTLED device" }
+                    feed: { name: newId, key: newId, description: `Auto-generated feed for SMARTLED device: ${newId}` }
                 })
             });
         }

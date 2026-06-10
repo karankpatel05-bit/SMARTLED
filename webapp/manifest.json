@@ -1,21 +1,24 @@
 {
     "name": "SMARTLED Controller",
-    "short_name": "SMARTLED",
+    "short_name": "SmartLED",
     "start_url": "./index.html",
     "display": "standalone",
+    "orientation": "portrait",
     "background_color": "#0f172a",
     "theme_color": "#3b82f6",
-    "description": "AI-powered Smart LED controller using camera and mic",
+    "description": "AI-powered Smart LED fleet controller using camera and voice",
     "icons": [
         {
             "src": "https://img.icons8.com/color/192/idea.png",
             "sizes": "192x192",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         },
         {
             "src": "https://img.icons8.com/color/512/idea.png",
             "sizes": "512x512",
-            "type": "image/png"
+            "type": "image/png",
+            "purpose": "any maskable"
         }
     ]
 }

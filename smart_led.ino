@@ -17,11 +17,13 @@ const int pwmPin = D1; // GPIO 5 - PWM / Brightness
 const int dirPin = D2; // GPIO 4 - Direction
 
 // ==========================================
-// Device Identity (derived from MAC address)
+// Device Identity
+// ⚡ CHANGE THIS for each device you flash!
+//    e.g. "smartled_setup1", "smartled_setup2", etc.
+//    This becomes BOTH the Wi-Fi AP name AND the
+//    device identifier shown in the SmartLED app.
 // ==========================================
-String deviceID;         // e.g. "aabbccddeeff"
-String deviceFeedTopic;  // AIO_USERNAME/feeds/smartled-aabbccddeeff
-String globalFeedTopic;  // AIO_USERNAME/feeds/smartled-all
+#define DEVICE_NAME "smartled_setup1"
 
 // ==========================================
 // MQTT Client
@@ -71,21 +73,23 @@ void connectMQTT() {
   lastMQTTAttempt = millis();
 
   Serial.print("MQTT connecting... ");
-  String clientId = "SmartLED-" + deviceID;
+  String clientId = String(DEVICE_NAME);
 
   if (mqtt.connect(clientId.c_str(), AIO_USERNAME, AIO_KEY)) {
     Serial.println("connected!");
 
-    // 1. Fleet ping — broadcast device ID to registry feed
+    // 1. Fleet ping — broadcast friendly name to registry feed
     String registryTopic = String(AIO_USERNAME) + "/feeds/smartled-registry";
-    mqtt.publish(registryTopic.c_str(), deviceID.c_str());
-    Serial.printf("Registry ping sent: %s\n", deviceID.c_str());
+    mqtt.publish(registryTopic.c_str(), DEVICE_NAME);
+    Serial.printf("Registry ping sent: %s\n", DEVICE_NAME);
 
     // 2. Subscribe to this device's specific command feed
+    String deviceFeedTopic = String(AIO_USERNAME) + "/feeds/" + String(DEVICE_NAME);
     mqtt.subscribe(deviceFeedTopic.c_str());
     Serial.printf("Subscribed: %s\n", deviceFeedTopic.c_str());
 
     // 3. Subscribe to global broadcast feed
+    String globalFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-all";
     mqtt.subscribe(globalFeedTopic.c_str());
     Serial.printf("Subscribed: %s\n", globalFeedTopic.c_str());
 
@@ -100,6 +104,7 @@ void connectMQTT() {
 void setup() {
   Serial.begin(115200);
   Serial.println("\nStarting SmartLED...");
+  Serial.printf("Device Name: %s\n", DEVICE_NAME);
 
   pinMode(dirPin, OUTPUT);
   pinMode(pwmPin, OUTPUT);
@@ -107,18 +112,13 @@ void setup() {
   analogWrite(pwmPin, 0);
   analogWriteRange(255);
 
-  // Build device ID from MAC (strip colons, lowercase) first so we can use it in AP name
-  deviceID = WiFi.macAddress();
-  deviceID.replace(":", "");
-  deviceID.toLowerCase();
-  Serial.printf("Device ID: %s\n", deviceID.c_str());
-
   WiFiManager wm;
   Serial.println("WiFiManager starting...");
-  
-  String apName = "SMARTLED_Setup_" + deviceID;
+
+  // AP name = DEVICE_NAME in UPPERCASE (e.g. SMARTLED_SETUP1)
+  String apName = String(DEVICE_NAME);
   apName.toUpperCase();
-  
+
   if (!wm.autoConnect(apName.c_str(), "password123")) {
     Serial.println("WiFi failed — restarting");
     delay(3000);
@@ -127,10 +127,6 @@ void setup() {
 
   Serial.println("\n✅ WiFi Connected!");
   Serial.print("IP: "); Serial.println(WiFi.localIP());
-
-  // Build feed topic strings
-  deviceFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-" + deviceID;
-  globalFeedTopic = String(AIO_USERNAME) + "/feeds/smartled-all";
 
   mqtt.setServer(AIO_SERVER, AIO_SERVERPORT);
   mqtt.setCallback(mqttCallback);
