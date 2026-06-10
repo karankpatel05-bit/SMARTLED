@@ -166,6 +166,8 @@ function renderDeviceCard(device) {
         renderGlobalCard();
     }
 
+    // Bug #9 fix: Guard against missing state (e.g. loaded from localStorage before init)
+    if (!deviceStates[device.id]) deviceStates[device.id] = { power: 1, brightness: 127 };
     const state = deviceStates[device.id];
     const pct   = Math.round((state.brightness / 255) * 100);
     const isOn  = state.power === 1 && state.brightness > 0;
@@ -415,18 +417,19 @@ function initApp() {
     return true;
 }
 
-window.addEventListener('load', () => {
-    if (!initApp()) return;
-    connectionScreen.classList.remove('active');
-    mainScreen.classList.add('active');
-    renderDashboard();
-    updateGlobalStatusBar();
-    startCamera();
-    pollRegistry();
-    setInterval(pollRegistry, 30000);
-    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
-});
+// Bug #2 fix: Store interval IDs so we can clear them on reconnect
+let _pollInterval = null;
+let _syncInterval = null;
 
+function startAppIntervals() {
+    if (_pollInterval) clearInterval(_pollInterval);
+    if (_syncInterval) clearInterval(_syncInterval);
+    pollRegistry();
+    _pollInterval = setInterval(pollRegistry, 30000);
+    _syncInterval = setInterval(syncDeviceStates, 5000);
+}
+
+// Bug #1 fix: Removed auto-start on 'load'. User must always press the button.
 connectBtn.addEventListener('click', () => {
     if (!initApp()) return;
     connectionScreen.classList.remove('active');
@@ -434,9 +437,7 @@ connectBtn.addEventListener('click', () => {
     renderDashboard();
     updateGlobalStatusBar();
     startCamera();
-    pollRegistry();
-    setInterval(pollRegistry, 30000);
-    setInterval(syncDeviceStates, 5000); // Sync every 5s for multi-user support
+    startAppIntervals();
 });
 
 disconnectBtn.addEventListener('click', () => {
@@ -459,13 +460,13 @@ function renderSettingsLists() {
     if (discoveredQueue.length === 0) {
         dList.innerHTML = `<div style="text-align:center;color:var(--text-muted);font-size:0.85rem;padding: 1rem 0;">No new devices detected.</div>`;
     } else {
+        // Bug #4 fix: Display friendly device ID directly, no MAC formatting
         discoveredQueue.forEach(id => {
-            const macDisplay = id.toUpperCase().match(/.{1,2}/g)?.join(':') || id;
             dList.innerHTML += `
                 <div class="manager-list-item">
                     <div>
-                        <div class="name-text">Unknown SmartLED</div>
-                        <div class="mac-text">${macDisplay}</div>
+                        <div class="name-text">New SmartLED</div>
+                        <div class="mac-text">${id}</div>
                     </div>
                     <button class="manager-btn add" onclick="openNamingModal('${id}')">Add</button>
                 </div>
@@ -554,10 +555,9 @@ document.getElementById('modal-save-btn').addEventListener('click', async () => 
     // Remove from discovered queue
     discoveredQueue = discoveredQueue.filter(id => id !== newId);
     
-    // Execute Auto-Provisioning directly
-    const feedKey = `smartled-${newId}`;
+    // Bug #3 fix: Use newId directly as the feed key — no double-prefix
     try {
-        const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${feedKey}`, {
+        const checkRes = await fetch(`https://io.adafruit.com/api/v2/${AIO_USERNAME}/feeds/${newId}`, {
             headers: { 'X-AIO-Key': AIO_KEY }
         });
         if (checkRes.status === 404) {
@@ -566,7 +566,7 @@ document.getElementById('modal-save-btn').addEventListener('click', async () => 
                 method: 'POST',
                 headers: { 'X-AIO-Key': AIO_KEY, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    feed: { name: newId, key: newId, description: `Auto-generated feed for SMARTLED device: ${newId}` }
+                    feed: { name: newId, key: newId, description: `SmartLED device feed: ${newId}` }
                 })
             });
         }
@@ -597,12 +597,13 @@ document.getElementById('close-settings-btn').addEventListener('click', () => {
 });
 
 // Settings Tabs Logic
+// Bug #8 fix: Use currentTarget (the button) not target (which may be the child <i> icon)
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         
-        const target = e.target;
+        const target = e.currentTarget;
         target.classList.add('active');
         document.getElementById(target.getAttribute('data-tab')).classList.add('active');
     });
@@ -708,7 +709,9 @@ if (SpeechRecognition) {
 
 function parseVoiceCommand(text) {
     if (!selectedId) return;
-    const s = { ...deviceStates[selectedId] };
+    // Bug #5 fix: deviceStates['all'] is undefined; fall back to first device or defaults
+    const refState = deviceStates[selectedId] || (knownDevices.length > 0 ? deviceStates[knownDevices[0].id] : null) || { power: 1, brightness: 127 };
+    const s = { ...refState };
     if      (text.includes('turn on')  || text.includes('lights on'))  { s.power = 1; if (s.brightness === 0) s.brightness = 255; }
     else if (text.includes('turn off') || text.includes('lights off')) { s.power = 0; }
     else if (text.includes('%') || text.includes('percent')) {

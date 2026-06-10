@@ -35,10 +35,10 @@
     <div id="connection-screen" class="glass-panel active">
         <div class="logo-container">
             <i class="ph ph-lightbulb bulb-icon"></i>
-            <h1>SmartLED</h1>
+            <h1>Smart LED</h1>
         </div>
-        <p>AI-Powered Fleet Controller<br>Camera · Voice · Gesture</p>
-        <button id="connect-btn" class="primary-btn">Launch Dashboard &nbsp;→</button>
+        <p>Fleet Dashboard — Powered by Adafruit IO</p>
+        <button id="connect-btn" class="primary-btn">Open Dashboard</button>
         <div id="connection-status"></div>
     </div>
 
@@ -50,9 +50,9 @@
                 <div class="dot connected"></div>
                 <span id="selected-device-label">No device selected</span>
             </div>
-            <div style="display:flex;gap:0.5rem;flex-shrink:0;">
-                <button id="settings-btn" class="icon-btn"><i class="ph ph-sliders"></i></button>
-                <button id="disconnect-btn" class="icon-btn"><i class="ph ph-arrow-left"></i></button>
+            <div>
+                <button id="settings-btn" class="icon-btn" style="display:inline-flex; margin-right: 0.5rem;"><i class="ph ph-gear"></i></button>
+                <button id="disconnect-btn" class="icon-btn" style="display:inline-flex;"><i class="ph ph-x"></i></button>
             </div>
         </header>
 
@@ -102,7 +102,7 @@
 
         <div id="tab-devices" class="tab-content active">
             <h3 style="margin-top: 1rem; color: var(--primary); font-size: 0.9rem; text-transform: uppercase;">Discovered Devices</h3>
-            <p style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-muted); text-align: left;">Devices powered on in the last 5 minutes</p>
+            <p style="font-size: 0.8rem; margin-bottom: 1rem; color: var(--text-muted); text-align: left;">Devices currently powered on and broadcasting</p>
             <div id="discovered-list" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 2rem;">
                 <!-- Rendered by JS -->
             </div>
@@ -130,7 +130,7 @@
                 </div>
                 <div class="step-text">
                     <h4>2. Power & Discovery</h4>
-                    <p>Once connected to your home network, the SmartLED will securely broadcast its signal to this app for the first 5 minutes.</p>
+                    <p>Once connected to your home network, the SmartLED will continuously broadcast its signal to this app as long as it is powered on.</p>
                 </div>
             </div>
             
